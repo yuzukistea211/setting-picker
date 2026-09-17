@@ -1,0 +1,73 @@
+@import "tailwindcss";
+@import url("https://fontsapi.zeoseven.com/777/main/result.css");
+
+:root {
+  /* 全域字體控制變數 - 修改此變數即可切換全站字體 */
+  --main-font: "SyaoranThenKhung";
+  --accent-color: #000000;
+}
+
+@theme {
+  --font-sans: var(--main-font);
+  --font-mono: var(--main-font);
+  --font-serif: var(--main-font);
+}
+
+@layer base {
+  /* 所有元素預設皆套用 --main-font 控制變數 */
+  *,
+  *::before,
+  *::after,
+  html,
+  body,
+  input,
+  button,
+  select,
+  textarea,
+  optgroup,
+  option,
+  code,
+  pre,
+  kbd,
+  samp,
+  svg text {
+    font-family: var(--main-font) !important;
+  }
+
+  body {
+    background-color: #ffffff;
+    color: var(--accent-color);
+    font-weight: normal;
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Prohibit any shadows and gradients strictly as per user instructions */
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* 覆蓋 Tailwind 的 font-mono / font-sans 類別，統一由 --main-font 變數控制 */
+  .font-mono,
+  .font-sans,
+  .font-serif {
+    font-family: var(--main-font) !important;
+  }
+}
+
+/* Stark black-and-white scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #ffffff;
+  border-left: 1px solid var(--accent-color);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--accent-color);
+}
+
+
