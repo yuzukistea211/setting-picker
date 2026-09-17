@@ -224,9 +224,6 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
                   角色備註與設定筆記
                 </span>
               </div>
-              <span className="text-[10px] font-mono text-neutral-500 border border-neutral-300 px-1.5 py-0.5">
-                即時儲存至紀錄
-              </span>
             </div>
 
             <div className="flex flex-col gap-3">

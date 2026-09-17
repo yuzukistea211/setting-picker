@@ -7,6 +7,7 @@ import { Navbar } from './components/Navbar';
 import { ExtractorPanel } from './components/frontend/ExtractorPanel';
 import { ResultPanel } from './components/frontend/ResultPanel';
 import { BackendDashboard } from './components/backend/BackendDashboard';
+import { StarrySpaceBackground } from './components/StarrySpaceBackground';
 
 export default function App() {
   const [dataset, setDataset] = useState<Dataset>(DEFAULT_DATASET);
@@ -119,7 +120,10 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-white text-black flex flex-col selection:bg-black selection:text-white">
+    <div className="min-h-screen bg-transparent text-black flex flex-col selection:bg-black selection:text-white relative">
+      {/* White Space Starry Background */}
+      <StarrySpaceBackground />
+
       {/* Top Navigation */}
       <Navbar
         currentTab={currentTab}
