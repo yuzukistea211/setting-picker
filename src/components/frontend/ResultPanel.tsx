@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Copy, Check, History, AlertTriangle, ArrowRight } from 'lucide-react';
-import { ExtractionResult, IntensityLevel } from '../../types';
+import { Copy, Check, History, AlertTriangle, ArrowRight, FileText, User } from 'lucide-react';
+import { ExtractionResult, IntensityLevel, ALL_INTENSITIES } from '../../types';
 
 interface ResultPanelProps {
   currentResult: ExtractionResult | null;
@@ -8,6 +8,8 @@ interface ResultPanelProps {
   onSelectHistoryItem: (item: ExtractionResult) => void;
   onClearHistory: () => void;
   onReroll: () => void;
+  onUpdateTraitIntensity: (traitIndex: number, newIntensity: IntensityLevel) => void;
+  onUpdateNotes: (characterName: string, notes: string) => void;
 }
 
 export const ResultPanel: React.FC<ResultPanelProps> = ({
@@ -16,6 +18,8 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
   onSelectHistoryItem,
   onClearHistory,
   onReroll,
+  onUpdateTraitIntensity,
+  onUpdateNotes,
 }) => {
   const [copied, setCopied] = useState(false);
 
@@ -23,9 +27,16 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
     if (!currentResult) return;
 
     let text = `【OC 設定檔案】\n`;
+    if (currentResult.characterName && currentResult.characterName.trim()) {
+      text += `角色姓名：${currentResult.characterName.trim()}\n`;
+    }
     text += `抽取時間：${new Date(currentResult.timestamp).toLocaleString()}\n\n`;
-    text += `─── 性格與心理詞條 ───\n`;
 
+    if (currentResult.notes && currentResult.notes.trim()) {
+      text += `─── 角色自訂備註 ───\n${currentResult.notes.trim()}\n\n`;
+    }
+
+    text += `─── 性格與心理詞條 ───\n`;
     currentResult.traits.forEach((item, index) => {
       text += `${index + 1}. [${item.axis}] 【${item.intensity}】${item.trait.name}\n   ${item.trait.description}\n`;
     });
@@ -70,9 +81,16 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
         <div className="flex items-center gap-2">
           <span className="text-sm font-black tracking-wider uppercase">抽取結果</span>
           {currentResult && (
-            <span className="text-xs font-mono border border-black px-2 py-0.5">
-              {new Date(currentResult.timestamp).toLocaleTimeString()}
-            </span>
+            <div className="flex items-center gap-1.5">
+              {currentResult.characterName && (
+                <span className="text-xs font-bold bg-black text-white px-2 py-0.5">
+                  {currentResult.characterName}
+                </span>
+              )}
+              <span className="text-xs font-mono border border-black px-2 py-0.5">
+                {new Date(currentResult.timestamp).toLocaleTimeString()}
+              </span>
+            </div>
           )}
         </div>
 
@@ -112,13 +130,34 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
               >
                 <div>
                   <div className="flex items-center justify-between gap-2 mb-1.5">
-                    <span
-                      className={`text-xs px-2 py-0.5 tracking-wider ${getIntensityBadgeClass(
-                        item.intensity,
-                      )}`}
-                    >
-                      {item.intensity}
-                    </span>
+                    {/* Interactive Intensity Select Dropdown */}
+                    <div className="flex items-center gap-1">
+                      <label htmlFor={`select-intensity-${idx}`} className="sr-only">
+                        詞條強度
+                      </label>
+                      <select
+                        id={`select-intensity-${idx}`}
+                        value={item.intensity}
+                        onChange={(e) =>
+                          onUpdateTraitIntensity(idx, e.target.value as IntensityLevel)
+                        }
+                        title="點擊更改詞條強度"
+                        className={`text-xs px-2 py-0.5 tracking-wider cursor-pointer outline-none transition-colors ${getIntensityBadgeClass(
+                          item.intensity,
+                        )}`}
+                      >
+                        {ALL_INTENSITIES.map((lvl) => (
+                          <option
+                            key={lvl}
+                            value={lvl}
+                            className="bg-white text-black font-normal"
+                          >
+                            {lvl}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
                     <span className="text-[11px] font-mono border border-black px-1.5 py-0.5">
                       {item.axis}
                     </span>
@@ -144,9 +183,6 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
             >
               <div className="flex items-center gap-2 border-b border-black pb-2">
                 <AlertTriangle size={16} />
-                <span className="text-xs font-black tracking-wider uppercase">
-                  弱相容標記 ({currentResult.weakCompatibilities.length})
-                </span>
               </div>
 
               <div className="flex flex-col gap-3">
@@ -178,6 +214,73 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
               </div>
             </div>
           )}
+
+          {/* Character Name & Custom Notes Plain Text Editing Area */}
+          <div
+            id="section-result-notes"
+            className="border-2 border-black p-4 bg-white flex flex-col gap-3"
+          >
+            <div className="flex items-center justify-between border-b border-black pb-2">
+              <div className="flex items-center gap-2">
+                <FileText size={16} />
+                <span className="text-xs font-black tracking-wider uppercase">
+                  角色備註與設定筆記
+                </span>
+              </div>
+              <span className="text-[10px] font-mono text-neutral-500 border border-neutral-300 px-1.5 py-0.5">
+                即時儲存至紀錄
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              {/* Character Name Input */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <label
+                  htmlFor="input-character-name"
+                  className="text-xs font-bold shrink-0 flex items-center gap-1 sm:w-24"
+                >
+                  <User size={13} />
+                  <span>角色姓名：</span>
+                </label>
+                <input
+                  id="input-character-name"
+                  type="text"
+                  value={currentResult.characterName || ''}
+                  onChange={(e) =>
+                    onUpdateNotes(e.target.value, currentResult.notes || '')
+                  }
+                  placeholder="輸入自訂角色姓名或稱呼（例如：雷恩·黑爾、莉莉絲、研究員 A）"
+                  className="flex-1 text-xs border border-black px-3 py-1.5 focus:bg-neutral-50 focus:outline-none placeholder:text-neutral-400 font-sans"
+                />
+              </div>
+
+              {/* Custom Notes Plain Text Area */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <label
+                    htmlFor="textarea-custom-notes"
+                    className="text-xs font-bold flex items-center gap-1"
+                  >
+                    <FileText size={13} />
+                    <span>自訂備註 / 角色筆記：</span>
+                  </label>
+                  <span className="text-[10px] font-mono text-neutral-400">
+                    {(currentResult.notes || '').length} 字
+                  </span>
+                </div>
+                <textarea
+                  id="textarea-custom-notes"
+                  rows={4}
+                  value={currentResult.notes || ''}
+                  onChange={(e) =>
+                    onUpdateNotes(currentResult.characterName || '', e.target.value)
+                  }
+                  placeholder="在此直接輸入自訂備註、背景故事設定、情節構思，或針對上方詞條強度的補充描寫..."
+                  className="w-full text-xs font-sans border border-black p-3 focus:bg-neutral-50 focus:outline-none resize-y leading-relaxed placeholder:text-neutral-400"
+                />
+              </div>
+            </div>
+          </div>
         </div>
       ) : (
         <div className="border-2 border-dashed border-black py-16 flex flex-col items-center justify-center text-center">
@@ -230,13 +333,23 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
                   }`}
                 >
                   <div className="flex flex-col gap-1 overflow-hidden">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-[10px] border border-black px-1">
                         {new Date(hist.timestamp).toLocaleTimeString()}
                       </span>
+                      {hist.characterName && (
+                        <span className="border border-black bg-black text-white text-[10px] px-1 font-bold">
+                          {hist.characterName}
+                        </span>
+                      )}
                       {hist.weakCompatibilities.length > 0 && (
-                        <span className="border border-black bg-black text-white text-[10px] px-1">
+                        <span className="border border-black text-[10px] px-1">
                           {hist.weakCompatibilities.length} 處弱相容
+                        </span>
+                      )}
+                      {hist.notes && hist.notes.trim() && (
+                        <span className="text-[10px] text-neutral-600 font-mono">
+                          [有備註]
                         </span>
                       )}
                     </div>
@@ -257,3 +370,4 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
     </section>
   );
 };
+

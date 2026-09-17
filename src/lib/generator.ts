@@ -89,6 +89,56 @@ export interface GeneratorOptions {
   customDataset?: Dataset;
 }
 
+export function evaluateWeakCompatibilities(
+  selectedItems: ExtractedTraitItem[],
+  dataset: Dataset,
+): WeakCompatibilityInfo[] {
+  const weakCompatibilities: WeakCompatibilityInfo[] = [];
+
+  for (let i = 0; i < selectedItems.length; i++) {
+    for (let j = i + 1; j < selectedItems.length; j++) {
+      const itemA = selectedItems[i];
+      const itemB = selectedItems[j];
+
+      // Check soft exclusion
+      const softRule = getSoftExclusion(itemA.trait.id, itemB.trait.id, dataset);
+      if (softRule) {
+        weakCompatibilities.push({
+          traitA: itemA.trait,
+          intensityA: itemA.intensity,
+          traitB: itemB.trait,
+          intensityB: itemB.intensity,
+          reasonType: 'soft_exclusion',
+          score: softRule.penaltyMultiplier,
+          note: softRule.note,
+        });
+        continue;
+      }
+
+      // Check strong negative co-occurrence
+      const coocWeight = getCooccurrenceWeight(
+        itemA.trait.id,
+        itemB.trait.id,
+        itemA.intensity,
+        dataset,
+      );
+      if (coocWeight <= -4) {
+        weakCompatibilities.push({
+          traitA: itemA.trait,
+          intensityA: itemA.intensity,
+          traitB: itemB.trait,
+          intensityB: itemB.intensity,
+          reasonType: 'strong_negative_weight',
+          score: coocWeight,
+          note: `此組詞條具有負相關性（權重 ${coocWeight}），在角色體現上形成「${itemA.trait.name}」與「${itemB.trait.name}」的內在張力。`,
+        });
+      }
+    }
+  }
+
+  return weakCompatibilities;
+}
+
 export function generateOC(
   dataset: Dataset,
   options: GeneratorOptions = {},
@@ -207,48 +257,7 @@ export function generateOC(
   }
 
   // Identify Weak Compatibilities among selected traits
-  const weakCompatibilities: WeakCompatibilityInfo[] = [];
-
-  for (let i = 0; i < selectedItems.length; i++) {
-    for (let j = i + 1; j < selectedItems.length; j++) {
-      const itemA = selectedItems[i];
-      const itemB = selectedItems[j];
-
-      // Check soft exclusion
-      const softRule = getSoftExclusion(itemA.trait.id, itemB.trait.id, dataset);
-      if (softRule) {
-        weakCompatibilities.push({
-          traitA: itemA.trait,
-          intensityA: itemA.intensity,
-          traitB: itemB.trait,
-          intensityB: itemB.intensity,
-          reasonType: 'soft_exclusion',
-          score: softRule.penaltyMultiplier,
-          note: softRule.note,
-        });
-        continue;
-      }
-
-      // Check strong negative co-occurrence
-      const coocWeight = getCooccurrenceWeight(
-        itemA.trait.id,
-        itemB.trait.id,
-        itemA.intensity,
-        dataset,
-      );
-      if (coocWeight <= -4) {
-        weakCompatibilities.push({
-          traitA: itemA.trait,
-          intensityA: itemA.intensity,
-          traitB: itemB.trait,
-          intensityB: itemB.intensity,
-          reasonType: 'strong_negative_weight',
-          score: coocWeight,
-          note: `此組詞條具有負相關性（權重 ${coocWeight}），在角色體現上形成「${itemA.trait.name}」與「${itemB.trait.name}」的內在張力。`,
-        });
-      }
-    }
-  }
+  const weakCompatibilities = evaluateWeakCompatibilities(selectedItems, dataset);
 
   return {
     id: 'oc-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),

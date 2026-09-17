@@ -1,5 +1,7 @@
 export type IntensityLevel = '隱藏' | '輕微' | '中等' | '強烈' | '極端';
 
+export const ALL_INTENSITIES: IntensityLevel[] = ['隱藏', '輕微', '中等', '強烈', '極端'];
+
 export interface Trait {
   id: string;
   name: string;
@@ -61,6 +63,8 @@ export interface ExtractionResult {
   traits: ExtractedTraitItem[];
   weakCompatibilities: WeakCompatibilityInfo[];
   specifiedAxes: string[];
+  characterName?: string;
+  notes?: string;
 }
 
 export interface Dataset {

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Dataset, ExtractionResult } from './types';
+import { Dataset, ExtractionResult, IntensityLevel } from './types';
 import { DEFAULT_DATASET } from './data/defaultTraits';
 import { loadDataset, resetToDefaultDataset, saveDataset } from './lib/storage';
-import { generateOC } from './lib/generator';
+import { generateOC, evaluateWeakCompatibilities } from './lib/generator';
 import { Navbar } from './components/Navbar';
 import { ExtractorPanel } from './components/frontend/ExtractorPanel';
 import { ResultPanel } from './components/frontend/ResultPanel';
@@ -86,6 +86,38 @@ export default function App() {
     }, 150);
   };
 
+  // Update intensity of a specific trait in current result
+  const handleUpdateTraitIntensity = (index: number, newIntensity: IntensityLevel) => {
+    if (!currentResult) return;
+    const updatedTraits = currentResult.traits.map((item, i) =>
+      i === index ? { ...item, intensity: newIntensity } : item,
+    );
+    const updatedWeakCompat = evaluateWeakCompatibilities(updatedTraits, dataset);
+    const updatedResult: ExtractionResult = {
+      ...currentResult,
+      traits: updatedTraits,
+      weakCompatibilities: updatedWeakCompat,
+    };
+    setCurrentResult(updatedResult);
+    setHistory((prev) =>
+      prev.map((h) => (h.id === updatedResult.id ? updatedResult : h)),
+    );
+  };
+
+  // Update character name or notes in current result
+  const handleUpdateNotes = (characterName: string, notes: string) => {
+    if (!currentResult) return;
+    const updatedResult: ExtractionResult = {
+      ...currentResult,
+      characterName,
+      notes,
+    };
+    setCurrentResult(updatedResult);
+    setHistory((prev) =>
+      prev.map((h) => (h.id === updatedResult.id ? updatedResult : h)),
+    );
+  };
+
   return (
     <div className="min-h-screen bg-white text-black flex flex-col selection:bg-black selection:text-white">
       {/* Top Navigation */}
@@ -127,6 +159,8 @@ export default function App() {
               onSelectHistoryItem={setCurrentResult}
               onClearHistory={() => setHistory([])}
               onReroll={handleGenerate}
+              onUpdateTraitIntensity={handleUpdateTraitIntensity}
+              onUpdateNotes={handleUpdateNotes}
             />
           </div>
         ) : (
