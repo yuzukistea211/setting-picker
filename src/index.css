@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url("https://fontsapi.zeoseven.com/777/main/result.css");
+@import "tailwindcss";
 
 :root {
   /* 全域字體控制變數 - 修改此變數即可切換全站字體 */

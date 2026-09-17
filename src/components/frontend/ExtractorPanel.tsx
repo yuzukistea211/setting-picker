@@ -39,8 +39,7 @@ export const ExtractorPanel: React.FC<ExtractorPanelProps> = ({
       <div className="flex flex-col gap-6">
         {/* Header bar of panel */}
         <div className="flex items-center justify-between border-b-2 border-black pb-2">
-          <span className="text-sm font-black tracking-wider uppercase">指定條件設定</span>
-          <span className="text-xs font-mono border border-black px-1.5 py-0.5">33% 寬度</span>
+          <span className="text-sm font-black tracking-wider uppercase">設定</span>
         </div>
 
         {/* Trait Count Selector */}
@@ -164,12 +163,10 @@ export const ExtractorPanel: React.FC<ExtractorPanelProps> = ({
           {isGenerating ? (
             <>
               <RefreshCw size={18} className="animate-spin" />
-              <span>計算機率中...</span>
             </>
           ) : (
             <>
               <Sparkles size={18} />
-              <span>抽取設定</span>
             </>
           )}
         </button>
