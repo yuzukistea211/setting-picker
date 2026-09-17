@@ -87,9 +87,6 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
                   {currentResult.characterName}
                 </span>
               )}
-              <span className="text-xs font-mono border border-black px-2 py-0.5">
-                {new Date(currentResult.timestamp).toLocaleTimeString()}
-              </span>
             </div>
           )}
         </div>
