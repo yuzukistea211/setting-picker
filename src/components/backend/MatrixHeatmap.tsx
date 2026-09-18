@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Filter, SlidersHorizontal, X } from 'lucide-react';
 import { CooccurrenceRule, Dataset, HardExclusionRule, SoftExclusionRule, Trait } from '../../types';
+import { getDatasetIndex } from '../../lib/generator';
 
 interface MatrixHeatmapProps {
   dataset: Dataset;
@@ -20,6 +21,11 @@ export const MatrixHeatmap: React.FC<MatrixHeatmapProps> = ({
   const [selectedAxis, setSelectedAxis] = useState<string>('ALL');
   const [activeCell, setActiveCell] = useState<{ traitA: Trait; traitB: Trait } | null>(null);
 
+  // Fast WeakMap index lookup
+  const matrixData = useMemo(() => {
+    return getDatasetIndex(dataset);
+  }, [dataset]);
+
   // Filtered traits for the matrix
   const filteredTraits = useMemo(() => {
     if (selectedAxis === 'ALL') {
@@ -27,38 +33,6 @@ export const MatrixHeatmap: React.FC<MatrixHeatmapProps> = ({
     }
     return dataset.traits.filter((t) => t.axis === selectedAxis);
   }, [dataset.traits, selectedAxis]);
-
-  // Quick lookup maps
-  const matrixData = useMemo(() => {
-    const hardMap = new Map<string, HardExclusionRule>();
-    const softMap = new Map<string, SoftExclusionRule>();
-    const coocMap = new Map<string, CooccurrenceRule>();
-
-    for (const h of dataset.hardExclusions) {
-      hardMap.set(`${h.traitAId}:${h.traitBId}`, h);
-      hardMap.set(`${h.traitBId}:${h.traitAId}`, h);
-    }
-    for (const s of dataset.softExclusions) {
-      softMap.set(`${s.traitAId}:${s.traitBId}`, s);
-      softMap.set(`${s.traitBId}:${s.traitAId}`, s);
-    }
-    for (const c of dataset.cooccurrenceRules) {
-      coocMap.set(`${c.traitAId}:${c.traitBId}`, c);
-      coocMap.set(`${c.traitBId}:${c.traitAId}`, c);
-    }
-
-    return { hardMap, softMap, coocMap };
-  }, [dataset.hardExclusions, dataset.softExclusions, dataset.cooccurrenceRules]);
-
-  // Currently selected cell details
-  const currentCellInfo = useMemo(() => {
-    if (!activeCell) return null;
-    const key = `${activeCell.traitA.id}:${activeCell.traitB.id}`;
-    const hard = matrixData.hardMap.get(key);
-    const soft = matrixData.softMap.get(key);
-    const cooc = matrixData.coocMap.get(key);
-    return { hard, soft, cooc };
-  }, [activeCell, matrixData]);
 
   // Edit state for active cell
   const [editCoocWeight, setEditCoocWeight] = useState<number>(0);
@@ -68,7 +42,7 @@ export const MatrixHeatmap: React.FC<MatrixHeatmapProps> = ({
   const [softPenalty, setSoftPenalty] = useState<number>(0.2);
   const [softNote, setSoftNote] = useState<string>('');
 
-  const handleOpenCell = (traitA: Trait, traitB: Trait) => {
+  const handleOpenCell = useCallback((traitA: Trait, traitB: Trait) => {
     setActiveCell({ traitA, traitB });
     const key = `${traitA.id}:${traitB.id}`;
     const hard = matrixData.hardMap.get(key);
@@ -83,7 +57,22 @@ export const MatrixHeatmap: React.FC<MatrixHeatmapProps> = ({
     setSoftNote(soft?.note || '');
 
     setEditCoocWeight(cooc?.weight ?? 0);
-  };
+  }, [matrixData]);
+
+  // Event delegation handler: removes thousands of closure allocations per render
+  const handleTbodyClick = useCallback((e: React.MouseEvent<HTMLTableSectionElement>) => {
+    const target = (e.target as HTMLElement).closest('td[data-row-id]');
+    if (!target) return;
+    const rowId = target.getAttribute('data-row-id');
+    const colId = target.getAttribute('data-col-id');
+    if (!rowId || !colId || rowId === colId) return;
+
+    const traitA = matrixData.traitMap.get(rowId);
+    const traitB = matrixData.traitMap.get(colId);
+    if (traitA && traitB) {
+      handleOpenCell(traitA, traitB);
+    }
+  }, [matrixData, handleOpenCell]);
 
   const handleSaveCell = () => {
     if (!activeCell) return;
@@ -206,7 +195,7 @@ export const MatrixHeatmap: React.FC<MatrixHeatmapProps> = ({
               ))}
             </tr>
           </thead>
-          <tbody>
+          <tbody onClick={handleTbodyClick}>
             {filteredTraits.map((rowTrait) => (
               <tr key={rowTrait.id} className="hover:bg-neutral-50">
                 {/* Row Header */}
@@ -264,7 +253,8 @@ export const MatrixHeatmap: React.FC<MatrixHeatmapProps> = ({
                   return (
                     <td
                       key={colTrait.id}
-                      onClick={() => handleOpenCell(rowTrait, colTrait)}
+                      data-row-id={rowTrait.id}
+                      data-col-id={colTrait.id}
                       className={cellClass}
                       title={`${rowTrait.name} × ${colTrait.name}`}
                     >

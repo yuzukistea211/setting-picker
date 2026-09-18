@@ -215,7 +215,9 @@ export const TraitFrequencyD3Chart: React.FC<TraitFrequencyD3ChartProps> = ({ st
       .attr('fill', '#737373')
       .text((d: TraitStatItem) => `[${d.axis}]`);
 
-    // Hover interactions
+    // Hover interactions with RAF throttling to prevent high-frequency re-renders & layout thrashing
+    let rafId: number | null = null;
+
     barGroups
       .on('mouseenter', (event: MouseEvent, d: TraitStatItem) => {
         const rect = containerRef.current?.getBoundingClientRect();
@@ -232,15 +234,25 @@ export const TraitFrequencyD3Chart: React.FC<TraitFrequencyD3ChartProps> = ({ st
         }
       })
       .on('mousemove', (event: MouseEvent) => {
-        const rect = containerRef.current?.getBoundingClientRect();
-        if (rect) {
-          setTooltipPos({
-            x: event.clientX - rect.left,
-            y: event.clientY - rect.top,
-          });
-        }
+        if (rafId !== null) return;
+        const clientX = event.clientX;
+        const clientY = event.clientY;
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          const rect = containerRef.current?.getBoundingClientRect();
+          if (rect) {
+            setTooltipPos({
+              x: clientX - rect.left,
+              y: clientY - rect.top,
+            });
+          }
+        });
       })
       .on('mouseleave', (event: MouseEvent, d: TraitStatItem) => {
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
         setHoveredTrait(null);
         setTooltipPos(null);
         const target = event.currentTarget as SVGGElement | null;
@@ -250,6 +262,12 @@ export const TraitFrequencyD3Chart: React.FC<TraitFrequencyD3ChartProps> = ({ st
             .attr('fill', d.count === 0 ? '#d4d4d4' : '#171717');
         }
       });
+
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      barGroups.on('mouseenter', null).on('mousemove', null).on('mouseleave', null);
+      svg.selectAll('*').remove();
+    };
   }, [sortedStats]);
 
   return (

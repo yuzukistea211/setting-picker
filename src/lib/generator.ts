@@ -1,8 +1,11 @@
 import {
+  CooccurrenceRule,
   Dataset,
   ExtractedTraitItem,
   ExtractionResult,
+  HardExclusionRule,
   IntensityLevel,
+  SoftExclusionRule,
   Trait,
   WeakCompatibilityInfo,
 } from '../types';
@@ -21,13 +24,57 @@ export const INTENSITY_DISTRIBUTION: { level: IntensityLevel; prob: number }[] =
   { level: '極端', prob: 0.06 },
 ];
 
+export interface DatasetIndex {
+  hardMap: Map<string, HardExclusionRule>;
+  softMap: Map<string, SoftExclusionRule>;
+  coocMap: Map<string, CooccurrenceRule>;
+  traitMap: Map<string, Trait>;
+}
+
+// Memory-safe WeakMap cache: automatically garbage collected when a dataset is discarded
+const datasetIndexCache = new WeakMap<Dataset, DatasetIndex>();
+
+export function getDatasetIndex(dataset: Dataset): DatasetIndex {
+  let index = datasetIndexCache.get(dataset);
+  if (!index) {
+    const hardMap = new Map<string, HardExclusionRule>();
+    const softMap = new Map<string, SoftExclusionRule>();
+    const coocMap = new Map<string, CooccurrenceRule>();
+    const traitMap = new Map<string, Trait>();
+
+    for (let i = 0; i < dataset.traits.length; i++) {
+      const t = dataset.traits[i];
+      traitMap.set(t.id, t);
+    }
+    for (let i = 0; i < dataset.hardExclusions.length; i++) {
+      const h = dataset.hardExclusions[i];
+      hardMap.set(`${h.traitAId}:${h.traitBId}`, h);
+      hardMap.set(`${h.traitBId}:${h.traitAId}`, h);
+    }
+    for (let i = 0; i < dataset.softExclusions.length; i++) {
+      const s = dataset.softExclusions[i];
+      softMap.set(`${s.traitAId}:${s.traitBId}`, s);
+      softMap.set(`${s.traitBId}:${s.traitAId}`, s);
+    }
+    for (let i = 0; i < dataset.cooccurrenceRules.length; i++) {
+      const c = dataset.cooccurrenceRules[i];
+      coocMap.set(`${c.traitAId}:${c.traitBId}`, c);
+      coocMap.set(`${c.traitBId}:${c.traitAId}`, c);
+    }
+
+    index = { hardMap, softMap, coocMap, traitMap };
+    datasetIndexCache.set(dataset, index);
+  }
+  return index;
+}
+
 export function sampleIntensity(): IntensityLevel {
   const r = Math.random();
   let cumulative = 0;
-  for (const item of INTENSITY_DISTRIBUTION) {
-    cumulative += item.prob;
+  for (let i = 0; i < INTENSITY_DISTRIBUTION.length; i++) {
+    cumulative += INTENSITY_DISTRIBUTION[i].prob;
     if (r <= cumulative) {
-      return item.level;
+      return INTENSITY_DISTRIBUTION[i].level;
     }
   }
   return '中等';
@@ -38,11 +85,8 @@ export function isHardExcluded(
   traitBId: string,
   dataset: Dataset,
 ): { excluded: boolean; reason?: string } {
-  const rule = dataset.hardExclusions.find(
-    (h) =>
-      (h.traitAId === traitAId && h.traitBId === traitBId) ||
-      (h.traitAId === traitBId && h.traitBId === traitAId),
-  );
+  const index = getDatasetIndex(dataset);
+  const rule = index.hardMap.get(`${traitAId}:${traitBId}`);
   if (rule) {
     return { excluded: true, reason: rule.reason };
   }
@@ -54,11 +98,8 @@ export function getSoftExclusion(
   traitBId: string,
   dataset: Dataset,
 ) {
-  return dataset.softExclusions.find(
-    (s) =>
-      (s.traitAId === traitAId && s.traitBId === traitBId) ||
-      (s.traitAId === traitBId && s.traitBId === traitAId),
-  );
+  const index = getDatasetIndex(dataset);
+  return index.softMap.get(`${traitAId}:${traitBId}`);
 }
 
 export function getCooccurrenceWeight(
@@ -67,12 +108,8 @@ export function getCooccurrenceWeight(
   intensityA: IntensityLevel | undefined,
   dataset: Dataset,
 ): number {
-  const rule = dataset.cooccurrenceRules.find(
-    (c) =>
-      (c.traitAId === traitAId && c.traitBId === traitBId) ||
-      (c.traitAId === traitBId && c.traitBId === traitAId),
-  );
-
+  const index = getDatasetIndex(dataset);
+  const rule = index.coocMap.get(`${traitAId}:${traitBId}`);
   if (!rule) return 0;
 
   let finalWeight = rule.weight;

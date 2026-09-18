@@ -1,6 +1,5 @@
-import { Dataset, IntensityLevel, SimulationResult } from '../types';
-
-const INTENSITY_NAMES: IntensityLevel[] = ['隱藏', '輕微', '中等', '強烈', '極端'];
+import { Dataset, IntensityLevel, SimulationResult, Trait } from '../types';
+import { getDatasetIndex, sampleIntensity } from './generator';
 
 export function runBatchSimulation(
   dataset: Dataset,
@@ -9,241 +8,174 @@ export function runBatchSimulation(
   specifiedAxes: string[] = [],
 ): SimulationResult {
   const startTime = performance.now();
+  const index = getDatasetIndex(dataset);
   const traits = dataset.traits;
-  const N = traits.length;
+  const numTraits = traits.length;
 
-  if (N === 0) {
-    return {
-      totalRuns: runs,
-      traitStats: [],
-      weakCompatibilityOccurrences: 0,
-      runTimeMs: 0,
+  const countMap: Record<string, number> = {};
+  const intensityMap: Record<string, Record<IntensityLevel, number>> = {};
+  let totalWeakCompatibilities = 0;
+
+  for (let i = 0; i < numTraits; i++) {
+    const tid = traits[i].id;
+    countMap[tid] = 0;
+    intensityMap[tid] = {
+      隱藏: 0,
+      輕微: 0,
+      中等: 0,
+      強烈: 0,
+      極端: 0,
     };
   }
 
-  // 1. Fast Indexing: trait ID to integer index
-  const idToIndex = new Map<string, number>();
-  const baseWeights = new Float64Array(N);
-  const traitAxes: string[] = new Array(N);
+  // Pre-allocated reusable arrays to eliminate object allocation & GC churn across thousands of simulation runs
+  const selectedTraits: Trait[] = [];
+  const selectedIntensities: IntensityLevel[] = [];
+  const candidatePool: Trait[] = [];
+  const candidateWeights: number[] = [];
 
-  for (let i = 0; i < N; i++) {
-    const t = traits[i];
-    idToIndex.set(t.id, i);
-    baseWeights[i] = t.baseWeight || 10;
-    traitAxes[i] = t.axis;
-  }
-
-  // 2. Pre-build lookup matrices (Flat typed arrays for zero GC and instant O(1) lookup)
-  const NN = N * N;
-  const hardExclusionMatrix = new Uint8Array(NN);
-  for (const h of dataset.hardExclusions) {
-    const idxA = idToIndex.get(h.traitAId);
-    const idxB = idToIndex.get(h.traitBId);
-    if (idxA !== undefined && idxB !== undefined) {
-      hardExclusionMatrix[idxA * N + idxB] = 1;
-      hardExclusionMatrix[idxB * N + idxA] = 1;
-    }
-  }
-
-  const softPenaltyMatrix = new Float64Array(NN);
-  softPenaltyMatrix.fill(1.0);
-  const softRuleExistsMatrix = new Uint8Array(NN);
-  for (const s of dataset.softExclusions) {
-    const idxA = idToIndex.get(s.traitAId);
-    const idxB = idToIndex.get(s.traitBId);
-    if (idxA !== undefined && idxB !== undefined) {
-      softPenaltyMatrix[idxA * N + idxB] = s.penaltyMultiplier;
-      softPenaltyMatrix[idxB * N + idxA] = s.penaltyMultiplier;
-      softRuleExistsMatrix[idxA * N + idxB] = 1;
-      softRuleExistsMatrix[idxB * N + idxA] = 1;
-    }
-  }
-
-  const coocBaseMatrix = new Float64Array(NN);
-  // Modifiers: 5 entries per pair (for intensities 0..4: 隱藏, 輕微, 中等, 強烈, 極端)
-  const coocModifiers = new Float64Array(NN * 5);
-  for (const c of dataset.cooccurrenceRules) {
-    const idxA = idToIndex.get(c.traitAId);
-    const idxB = idToIndex.get(c.traitBId);
-    if (idxA !== undefined && idxB !== undefined) {
-      coocBaseMatrix[idxA * N + idxB] = c.weight;
-      coocBaseMatrix[idxB * N + idxA] = c.weight;
-
-      if (c.intensityModifiers) {
-        for (let lvlIdx = 0; lvlIdx < 5; lvlIdx++) {
-          const lvlName = INTENSITY_NAMES[lvlIdx];
-          const mod = c.intensityModifiers[lvlName];
-          if (mod !== undefined) {
-            coocModifiers[(idxA * N + idxB) * 5 + lvlIdx] = mod;
-            coocModifiers[(idxB * N + idxA) * 5 + lvlIdx] = mod;
-          }
-        }
-      }
-    }
-  }
-
-  // 3. In-place accumulators (Direct counting, zero temporary objects)
-  const traitCounts = new Int32Array(N);
-  const intensityCounts = new Int32Array(N * 5);
-  let totalWeakCompatibilities = 0;
-
-  // Reusable working buffers per run
-  const targetK = Math.min(traitCount, N);
-  const selectedIndices = new Int32Array(targetK);
-  const selectedIntensities = new Uint8Array(targetK);
-  const selectedMask = new Uint8Array(N);
-  const candidateWeights = new Float64Array(N);
-  const candidateIndices = new Int32Array(N);
-
-  const hasSpecifiedAxes = specifiedAxes.length > 0;
-
-  // 4. Batch Simulation loop: Zero object allocation per iteration
   for (let r = 0; r < runs; r++) {
-    let selectedCount = 0;
-    const satisfiedAxesMask: Set<string> | null = hasSpecifiedAxes ? new Set<string>() : null;
+    selectedTraits.length = 0;
+    selectedIntensities.length = 0;
 
-    while (selectedCount < targetK) {
-      let candidatePoolCount = 0;
+    const satisfiedAxesSet = new Set<string>();
 
-      // Filter non-hard-excluded candidates
-      for (let c = 0; c < N; c++) {
-        if (selectedMask[c] === 1) continue;
+    while (selectedTraits.length < traitCount) {
+      candidatePool.length = 0;
+      candidateWeights.length = 0;
 
-        let hardBlocked = false;
-        for (let s = 0; s < selectedCount; s++) {
-          if (hardExclusionMatrix[c * N + selectedIndices[s]] === 1) {
-            hardBlocked = true;
+      // Check if there are specified axes not yet satisfied
+      let hasUnfulfilledAxis = false;
+      if (specifiedAxes.length > 0) {
+        for (let a = 0; a < specifiedAxes.length; a++) {
+          if (!satisfiedAxesSet.has(specifiedAxes[a])) {
+            hasUnfulfilledAxis = true;
             break;
           }
         }
-        if (!hardBlocked) {
-          candidateIndices[candidatePoolCount++] = c;
-        }
       }
 
-      if (candidatePoolCount === 0) break;
-
-      // Check unfulfilled specified axes if requested
-      const poolStart = 0;
-      let poolEnd = candidatePoolCount;
-
-      if (hasSpecifiedAxes && satisfiedAxesMask) {
-        let unfulfilledCount = 0;
-        for (let sa = 0; sa < specifiedAxes.length; sa++) {
-          if (!satisfiedAxesMask.has(specifiedAxes[sa])) {
-            unfulfilledCount++;
+      // Step 1: Collect non-hard-excluded, unselected candidates
+      for (let t = 0; t < numTraits; t++) {
+        const candidate = traits[t];
+        // Check if already selected
+        let alreadySelected = false;
+        for (let s = 0; s < selectedTraits.length; s++) {
+          if (selectedTraits[s].id === candidate.id) {
+            alreadySelected = true;
+            break;
           }
         }
+        if (alreadySelected) continue;
 
-        if (unfulfilledCount > 0) {
-          let unfulfilledCandidateCount = 0;
-          for (let i = 0; i < candidatePoolCount; i++) {
-            const candIdx = candidateIndices[i];
-            const axis = traitAxes[candIdx];
-            if (specifiedAxes.includes(axis) && !satisfiedAxesMask.has(axis)) {
-              candidateIndices[unfulfilledCandidateCount++] = candIdx;
+        // Check hard exclusions with all currently selected traits in O(1) time
+        let hardExcluded = false;
+        for (let s = 0; s < selectedTraits.length; s++) {
+          if (index.hardMap.has(`${candidate.id}:${selectedTraits[s].id}`)) {
+            hardExcluded = true;
+            break;
+          }
+        }
+        if (hardExcluded) continue;
+
+        // Candidate is valid
+        let weight = candidate.baseWeight || 10;
+
+        // Axis specification boost
+        if (hasUnfulfilledAxis && specifiedAxes.includes(candidate.axis) && !satisfiedAxesSet.has(candidate.axis)) {
+          weight += 20;
+        }
+
+        // Apply co-occurrence weights & soft exclusion penalties
+        let softPenaltyMultiplier = 1;
+        for (let s = 0; s < selectedTraits.length; s++) {
+          const selTrait = selectedTraits[s];
+          const selIntensity = selectedIntensities[s];
+
+          // Co-occurrence
+          const coocRule = index.coocMap.get(`${selTrait.id}:${candidate.id}`);
+          if (coocRule) {
+            let coocWeight = coocRule.weight;
+            if (selIntensity && coocRule.intensityModifiers && coocRule.intensityModifiers[selIntensity]) {
+              coocWeight += coocRule.intensityModifiers[selIntensity]!;
             }
+            weight += coocWeight * 1.5;
           }
-          if (unfulfilledCandidateCount > 0) {
-            poolEnd = unfulfilledCandidateCount;
+
+          // Soft exclusion
+          const softRule = index.softMap.get(`${selTrait.id}:${candidate.id}`);
+          if (softRule) {
+            softPenaltyMultiplier *= softRule.penaltyMultiplier;
           }
         }
+
+        weight *= softPenaltyMultiplier;
+        weight = Math.max(0.05, weight);
+
+        candidatePool.push(candidate);
+        candidateWeights.push(weight);
       }
 
-      // Compute dynamic weights for candidates in the pool
+      if (candidatePool.length === 0) break;
+
+      // Step 2: Weighted random pick
       let totalWeight = 0;
-      for (let i = poolStart; i < poolEnd; i++) {
-        const c = candidateIndices[i];
-        let weight = baseWeights[c];
-
-        if (hasSpecifiedAxes && satisfiedAxesMask) {
-          const axis = traitAxes[c];
-          if (specifiedAxes.includes(axis) && !satisfiedAxesMask.has(axis)) {
-            weight += 20;
-          }
-        }
-
-        let softMultiplier = 1.0;
-        for (let s = 0; s < selectedCount; s++) {
-          const selIdx = selectedIndices[s];
-          const selInt = selectedIntensities[s];
-          const pair = c * N + selIdx;
-
-          const cooc = coocBaseMatrix[pair] + coocModifiers[pair * 5 + selInt];
-          weight += cooc * 1.5;
-          softMultiplier *= softPenaltyMatrix[pair];
-        }
-
-        weight *= softMultiplier;
-        if (weight < 0.05) weight = 0.05;
-
-        candidateWeights[i] = weight;
-        totalWeight += weight;
+      for (let w = 0; w < candidateWeights.length; w++) {
+        totalWeight += candidateWeights[w];
       }
 
-      // Weighted random selection
       let rand = Math.random() * totalWeight;
-      let chosenIdx = candidateIndices[poolStart];
+      let chosenCandidate = candidatePool[0];
 
-      for (let i = poolStart; i < poolEnd; i++) {
-        rand -= candidateWeights[i];
+      for (let w = 0; w < candidateWeights.length; w++) {
+        rand -= candidateWeights[w];
         if (rand <= 0) {
-          chosenIdx = candidateIndices[i];
+          chosenCandidate = candidatePool[w];
           break;
         }
       }
 
-      // Discrete Gaussian intensity sampling:
-      // 隱藏 6%, 輕微 24%, 中等 40%, 強烈 24%, 極端 6%
-      const rInt = Math.random();
-      let sampledIntensityIdx = 2; // 中等
-      if (rInt <= 0.06) sampledIntensityIdx = 0; // 隱藏
-      else if (rInt <= 0.30) sampledIntensityIdx = 1; // 輕微
-      else if (rInt <= 0.70) sampledIntensityIdx = 2; // 中等
-      else if (rInt <= 0.94) sampledIntensityIdx = 3; // 強烈
-      else sampledIntensityIdx = 4; // 極端
-
-      selectedIndices[selectedCount] = chosenIdx;
-      selectedIntensities[selectedCount] = sampledIntensityIdx;
-      selectedMask[chosenIdx] = 1;
-      if (satisfiedAxesMask) {
-        satisfiedAxesMask.add(traitAxes[chosenIdx]);
-      }
-      selectedCount++;
+      const intensity = sampleIntensity();
+      selectedTraits.push(chosenCandidate);
+      selectedIntensities.push(intensity);
+      satisfiedAxesSet.add(chosenCandidate.axis);
     }
 
-    // Evaluate weak compatibilities in-place
-    for (let a = 0; a < selectedCount; a++) {
-      const idxA = selectedIndices[a];
-      const intA = selectedIntensities[a];
-      for (let b = a + 1; b < selectedCount; b++) {
-        const idxB = selectedIndices[b];
-        const pair = idxA * N + idxB;
+    // Step 3: Count weak compatibilities pairwise without creating description objects
+    const numSelected = selectedTraits.length;
+    for (let i = 0; i < numSelected; i++) {
+      const traitA = selectedTraits[i];
+      const intensityA = selectedIntensities[i];
 
-        if (softRuleExistsMatrix[pair] === 1) {
+      countMap[traitA.id]++;
+      intensityMap[traitA.id][intensityA]++;
+
+      for (let j = i + 1; j < numSelected; j++) {
+        const traitB = selectedTraits[j];
+
+        // Soft exclusion
+        if (index.softMap.has(`${traitA.id}:${traitB.id}`)) {
           totalWeakCompatibilities++;
-        } else {
-          const cooc = coocBaseMatrix[pair] + coocModifiers[pair * 5 + intA];
-          if (cooc <= -4) {
+          continue;
+        }
+
+        // Negative co-occurrence <= -4
+        const coocRule = index.coocMap.get(`${traitA.id}:${traitB.id}`);
+        if (coocRule) {
+          let coocWeight = coocRule.weight;
+          if (intensityA && coocRule.intensityModifiers && coocRule.intensityModifiers[intensityA]) {
+            coocWeight += coocRule.intensityModifiers[intensityA]!;
+          }
+          if (coocWeight <= -4) {
             totalWeakCompatibilities++;
           }
         }
       }
     }
-
-    // Direct in-place accumulation & mask cleanup
-    for (let s = 0; s < selectedCount; s++) {
-      const idx = selectedIndices[s];
-      const intIdx = selectedIntensities[s];
-      traitCounts[idx]++;
-      intensityCounts[idx * 5 + intIdx]++;
-      selectedMask[idx] = 0;
-    }
   }
 
-  // 5. Build final result once at the end
-  const traitStats = traits.map((trait, idx) => {
-    const count = traitCounts[idx];
+  const traitStats = traits.map((trait) => {
+    const count = countMap[trait.id] || 0;
     const rate = Number(((count / runs) * 100).toFixed(1));
     return {
       traitId: trait.id,
@@ -251,13 +183,7 @@ export function runBatchSimulation(
       axis: trait.axis,
       count,
       rate,
-      intensityCounts: {
-        隱藏: intensityCounts[idx * 5 + 0],
-        輕微: intensityCounts[idx * 5 + 1],
-        中等: intensityCounts[idx * 5 + 2],
-        強烈: intensityCounts[idx * 5 + 3],
-        極端: intensityCounts[idx * 5 + 4],
-      },
+      intensityCounts: intensityMap[trait.id],
     };
   });
 

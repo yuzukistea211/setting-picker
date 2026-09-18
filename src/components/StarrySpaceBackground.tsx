@@ -33,39 +33,19 @@ interface ShootingStar {
   maxLife: number;
 }
 
-interface StarrySpaceBackgroundProps {
-  performanceMode?: boolean;
-}
+// Pre-compute 21 discrete alpha strings to prevent thousands of string allocations per second in render loop
+const ALPHA_COLOR_CACHE: string[] = Array.from({ length: 21 }, (_, i) => {
+  const a = (i / 20).toFixed(2);
+  return `rgba(0, 0, 0, ${a})`;
+});
 
-// Reusable offscreen canvas for meteor tail linear gradient (Allocated once, zero GC)
-let sharedTailGradientCanvas: HTMLCanvasElement | null = null;
+const getCachedAlphaColor = (alpha: number): string => {
+  const clamped = Math.max(0, Math.min(1, alpha));
+  const index = Math.round(clamped * 20);
+  return ALPHA_COLOR_CACHE[index];
+};
 
-function getSharedTailGradientCanvas(): HTMLCanvasElement {
-  if (!sharedTailGradientCanvas && typeof document !== 'undefined') {
-    const gradCanvas = document.createElement('canvas');
-    gradCanvas.width = 128;
-    gradCanvas.height = 4;
-    const gCtx = gradCanvas.getContext('2d');
-    if (gCtx) {
-      const grad = gCtx.createLinearGradient(0, 0, 128, 0);
-      grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-      grad.addColorStop(0.7, 'rgba(0, 0, 0, 0.4)');
-      grad.addColorStop(1, 'rgba(0, 0, 0, 1.0)');
-      gCtx.fillStyle = grad;
-      gCtx.fillRect(0, 0, 128, 4);
-    }
-    sharedTailGradientCanvas = gradCanvas;
-  }
-  return sharedTailGradientCanvas!;
-}
-
-// Maximum hardware canvas resolution constraints to prevent VRAM explosion on 2x/3x Retina & 4K screens
-const MAX_CANVAS_WIDTH = 1920;
-const MAX_CANVAS_HEIGHT = 1080;
-
-export const StarrySpaceBackground: React.FC<StarrySpaceBackgroundProps> = ({
-  performanceMode = false,
-}) => {
+export const StarrySpaceBackground: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -75,7 +55,7 @@ export const StarrySpaceBackground: React.FC<StarrySpaceBackgroundProps> = ({
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) return;
 
-    let animFrameId: number;
+    let animFrameId: number | null = null;
     let width = 0;
     let height = 0;
     let stars: Star[] = [];
@@ -85,132 +65,47 @@ export const StarrySpaceBackground: React.FC<StarrySpaceBackgroundProps> = ({
     let targetParallaxY = 0;
     let currentParallaxX = 0;
     let currentParallaxY = 0;
-    let nextShootingStarTime = Date.now() + 3000;
-
-    const cachedTail = getSharedTailGradientCanvas();
-
-    const draw4PointSparkle = (
-      targetCtx: CanvasRenderingContext2D,
-      cx: number,
-      cy: number,
-      radius: number,
-      rot: number,
-      alpha: number,
-    ) => {
-      targetCtx.save();
-      targetCtx.translate(cx, cy);
-      targetCtx.rotate(rot);
-      targetCtx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
-
-      targetCtx.beginPath();
-      const points = 4;
-      const innerRadius = radius * 0.22;
-
-      for (let i = 0; i < points * 2; i++) {
-        const r = i % 2 === 0 ? radius : innerRadius;
-        const angle = (i * Math.PI) / points;
-        const px = Math.cos(angle) * r;
-        const py = Math.sin(angle) * r;
-        if (i === 0) targetCtx.moveTo(px, py);
-        else targetCtx.lineTo(px, py);
-      }
-      targetCtx.closePath();
-      targetCtx.fill();
-
-      // Tiny core center dot for crisp astronomical look
-      targetCtx.fillStyle = `rgba(0, 0, 0, ${Math.min(1, alpha + 0.2)})`;
-      targetCtx.beginPath();
-      targetCtx.arc(0, 0, 1, 0, Math.PI * 2);
-      targetCtx.fill();
-
-      targetCtx.restore();
-    };
-
-    const drawCelestialCoordinates = (targetCtx: CanvasRenderingContext2D, w: number, h: number) => {
-      targetCtx.save();
-      targetCtx.strokeStyle = 'rgba(0, 0, 0, 0.05)';
-      targetCtx.lineWidth = 0.8;
-      targetCtx.setLineDash([4, 8]);
-      targetCtx.beginPath();
-      targetCtx.arc(w * 0.15, h * 0.25, 140, 0, Math.PI * 2);
-      targetCtx.stroke();
-
-      targetCtx.beginPath();
-      targetCtx.arc(w * 0.82, h * 0.65, 200, 0, Math.PI * 2);
-      targetCtx.stroke();
-
-      targetCtx.beginPath();
-      targetCtx.ellipse(w * 0.5, h * 0.9, 320, 110, -0.2, 0, Math.PI * 2);
-      targetCtx.stroke();
-      targetCtx.restore();
-    };
+    let nextShootingStarTime = Date.now() + 2500;
+    let isPaused = false;
 
     const setupCanvas = () => {
+      // Memory optimization: cap DPR at 1.25 to prevent massive canvas backing store memory on 4K / retina screens
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
       width = window.innerWidth;
       height = window.innerHeight;
-
-      // Restrict Canvas resolution:
-      // In performance mode: force 1.0 DPR
-      // In standard dynamic mode: clamp to max 1.25 DPR (protects against 2x/3x high DPR VRAM bloat)
-      const rawDpr = window.devicePixelRatio || 1;
-      const dpr = performanceMode ? 1.0 : Math.min(rawDpr, 1.25);
-
-      let targetWidth = Math.round(width * dpr);
-      let targetHeight = Math.round(height * dpr);
-
-      // Clamp absolute max pixel bounds to prevent excessive framebuffer memory
-      if (targetWidth > MAX_CANVAS_WIDTH || targetHeight > MAX_CANVAS_HEIGHT) {
-        const clampRatio = Math.min(
-          MAX_CANVAS_WIDTH / targetWidth,
-          MAX_CANVAS_HEIGHT / targetHeight,
-        );
-        targetWidth = Math.round(targetWidth * clampRatio);
-        targetHeight = Math.round(targetHeight * clampRatio);
-      }
-
-      canvas.width = targetWidth;
-      canvas.height = targetHeight;
+      canvas.width = Math.floor(width * dpr);
+      canvas.height = Math.floor(height * dpr);
       canvas.style.width = `${width}px`;
       canvas.style.height = `${height}px`;
-
-      const scaleX = targetWidth / width;
-      const scaleY = targetHeight / height;
-      ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       initStarfield();
-
-      if (performanceMode) {
-        renderStaticFrame();
-      }
     };
 
     const initStarfield = () => {
-      stars = [];
-      // Reduce star count in performance mode to save memory and CPU
-      const baseDivisor = performanceMode ? 18000 : 10000;
-      const minStars = performanceMode ? 50 : 90;
-      const maxStars = performanceMode ? 80 : 150;
-      const count = Math.min(maxStars, Math.floor(Math.max(minStars, (width * height) / baseDivisor)));
+      // Memory optimization: cap star count at 85 to reduce memory and draw call overhead
+      const count = Math.min(85, Math.floor(Math.max(50, (width * height) / 16000)));
+      stars = new Array(count);
 
       for (let i = 0; i < count; i++) {
         const randType = Math.random();
         let type: 'dot' | 'sparkle' | 'ring' = 'dot';
-        let size = Math.random() * 1.5 + 0.6; // 0.6 - 2.1px
+        let size = Math.random() * 1.5 + 0.6; // 0.6 - 2.1px default
 
         if (randType > 0.88) {
-          type = 'sparkle';
-          size = Math.random() * 3.0 + 2.5;
+          type = 'sparkle'; // 4-pointed cross star
+          size = Math.random() * 3.0 + 2.8;
         } else if (randType > 0.82) {
-          type = 'ring';
-          size = Math.random() * 2 + 2.2;
+          type = 'ring'; // planetoid / celestial ring node
+          size = Math.random() * 1.8 + 2.2;
         }
 
-        const depth = Math.random() * 0.8 + 0.2;
+        const depth = Math.random() * 0.8 + 0.2; // depth for parallax
         const x = Math.random() * width;
         const y = Math.random() * height;
-        const baseAlpha = Math.random() * 0.5 + 0.35;
+        const baseAlpha = Math.random() * 0.5 + 0.35; // 0.35 - 0.85
 
-        stars.push({
+        stars[i] = {
           x,
           y,
           baseX: x,
@@ -219,24 +114,27 @@ export const StarrySpaceBackground: React.FC<StarrySpaceBackgroundProps> = ({
           type,
           baseAlpha,
           alpha: baseAlpha,
-          twinkleSpeed: Math.random() * 0.03 + 0.01,
+          twinkleSpeed: Math.random() * 0.025 + 0.01,
           phase: Math.random() * Math.PI * 2,
           depth,
           rotation: Math.random() * Math.PI,
-          rotSpeed: (Math.random() - 0.5) * 0.005,
-        });
+          rotSpeed: (Math.random() - 0.5) * 0.004,
+        };
       }
 
-      // Generate subtle constellation connection edges
+      // Generate subtle constellation connection edges (sparse)
       constellationEdges = [];
-      const sparkleIndices = stars
-        .map((s, idx) => (s.type === 'sparkle' || s.size > 2 ? idx : -1))
-        .filter((idx) => idx !== -1);
+      const sparkleIndices: number[] = [];
+      for (let i = 0; i < stars.length; i++) {
+        if (stars[i].type === 'sparkle' || stars[i].size > 2) {
+          sparkleIndices.push(i);
+        }
+      }
 
       for (let i = 0; i < sparkleIndices.length; i++) {
         const idxA = sparkleIndices[i];
         const starA = stars[idxA];
-        let closestDist = 160;
+        let closestDist = 170;
         let closestIdx = -1;
 
         for (let j = i + 1; j < sparkleIndices.length; j++) {
@@ -246,7 +144,7 @@ export const StarrySpaceBackground: React.FC<StarrySpaceBackgroundProps> = ({
           const dy = starA.baseY - starB.baseY;
           const dist = Math.sqrt(dx * dx + dy * dy);
 
-          if (dist > 40 && dist < closestDist) {
+          if (dist > 45 && dist < closestDist) {
             closestDist = dist;
             closestIdx = idxB;
           }
@@ -256,64 +154,43 @@ export const StarrySpaceBackground: React.FC<StarrySpaceBackgroundProps> = ({
           constellationEdges.push({
             fromIndex: idxA,
             toIndex: closestIdx,
-            alpha: Math.random() * 0.12 + 0.06,
+            alpha: Math.random() * 0.12 + 0.08,
           });
         }
       }
     };
 
-    // Performance Mode: Render a single crisp, static starry frame without running continuous 60fps loop
-    const renderStaticFrame = () => {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, width, height);
+    const draw4PointSparkle = (cx: number, cy: number, radius: number, rot: number, alpha: number) => {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(rot);
+      ctx.fillStyle = getCachedAlphaColor(alpha);
 
-      drawCelestialCoordinates(ctx, width, height);
+      ctx.beginPath();
+      const points = 4;
+      const innerRadius = radius * 0.22;
 
-      // Constellation lines
-      for (const edge of constellationEdges) {
-        const starA = stars[edge.fromIndex];
-        const starB = stars[edge.toIndex];
-        if (!starA || !starB) continue;
-
-        ctx.strokeStyle = `rgba(0, 0, 0, ${edge.alpha * 0.8})`;
-        ctx.lineWidth = 0.6;
-        ctx.setLineDash([2, 4]);
-        ctx.beginPath();
-        ctx.moveTo(starA.baseX, starA.baseY);
-        ctx.lineTo(starB.baseX, starB.baseY);
-        ctx.stroke();
+      for (let i = 0; i < points * 2; i++) {
+        const r = i % 2 === 0 ? radius : innerRadius;
+        const angle = (i * Math.PI) / points;
+        const px = Math.cos(angle) * r;
+        const py = Math.sin(angle) * r;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
       }
+      ctx.closePath();
+      ctx.fill();
 
-      // Static stars
-      for (let i = 0; i < stars.length; i++) {
-        const s = stars[i];
-        if (s.type === 'sparkle') {
-          draw4PointSparkle(ctx, s.baseX, s.baseY, s.size, s.rotation, s.baseAlpha);
-        } else if (s.type === 'ring') {
-          ctx.strokeStyle = `rgba(0, 0, 0, ${s.baseAlpha * 0.5})`;
-          ctx.lineWidth = 0.8;
-          ctx.setLineDash([]);
-          ctx.beginPath();
-          ctx.arc(s.baseX, s.baseY, s.size, 0, Math.PI * 2);
-          ctx.stroke();
+      // Tiny core center dot
+      ctx.fillStyle = getCachedAlphaColor(alpha + 0.2);
+      ctx.beginPath();
+      ctx.arc(0, 0, 1, 0, Math.PI * 2);
+      ctx.fill();
 
-          ctx.fillStyle = `rgba(0, 0, 0, ${s.baseAlpha})`;
-          ctx.beginPath();
-          ctx.arc(s.baseX, s.baseY, 1.2, 0, Math.PI * 2);
-          ctx.fill();
-        } else {
-          ctx.fillStyle = `rgba(0, 0, 0, ${s.baseAlpha})`;
-          ctx.beginPath();
-          ctx.arc(s.baseX, s.baseY, s.size, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
+      ctx.restore();
     };
 
     const spawnShootingStar = () => {
-      // Limit active shooting stars to max 2 simultaneously
-      if (shootingStars.length >= 2) return;
-
       const startX = Math.random() * width * 0.8 + width * 0.1;
       const startY = Math.random() * height * 0.4;
       const angle = (Math.random() * 25 + 25) * (Math.PI / 180);
@@ -327,7 +204,7 @@ export const StarrySpaceBackground: React.FC<StarrySpaceBackgroundProps> = ({
         length,
         speed,
         angle,
-        alpha: 0.85,
+        alpha: 0.8,
         life: 0,
         maxLife,
       });
@@ -340,141 +217,188 @@ export const StarrySpaceBackground: React.FC<StarrySpaceBackgroundProps> = ({
       targetParallaxY = (e.clientY - height / 2) * 0.015;
     };
 
-    window.addEventListener('resize', setupCanvas, { passive: true });
-    if (!performanceMode) {
-      window.addEventListener('mousemove', handleMouseMove, { passive: true });
-    }
+    // Debounce resize to prevent memory spikes from recreating buffers on every resize pixel
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+    const handleResize = () => {
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        setupCanvas();
+      }, 150);
+    };
 
+    window.addEventListener('resize', handleResize, { passive: true });
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
     setupCanvas();
 
-    // If Performance Mode is active, stop right here! No 60fps loop, 0 CPU/GPU usage!
-    if (performanceMode) {
-      return () => {
-        window.removeEventListener('resize', setupCanvas);
-      };
-    }
-
-    // Dynamic Animation Loop
     let lastTime = performance.now();
 
     const render = (time: number) => {
+      if (isPaused) return;
+
       animFrameId = requestAnimationFrame(render);
 
-      if (document.hidden) return;
-
-      const delta = Math.min((time - lastTime) / 16.67, 3);
+      const delta = Math.min((time - lastTime) / 16.67, 2.5);
       lastTime = time;
 
-      // Parallax smooth interpolation
+      // Smooth parallax interpolation
       currentParallaxX += (targetParallaxX - currentParallaxX) * 0.05 * delta;
       currentParallaxY += (targetParallaxY - currentParallaxY) * 0.05 * delta;
 
-      // Clear
+      // Clear with pure white space
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, width, height);
 
-      // Faint coordinate rings
-      drawCelestialCoordinates(ctx, width, height);
+      // Faint astronomical celestial coordinate / orbit rings
+      ctx.save();
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.04)';
+      ctx.lineWidth = 0.8;
+      ctx.setLineDash([4, 8]);
+      ctx.beginPath();
+      ctx.arc(width * 0.15, height * 0.25, 140, 0, Math.PI * 2);
+      ctx.stroke();
 
-      // Constellation Lines
-      for (const edge of constellationEdges) {
-        const starA = stars[edge.fromIndex];
-        const starB = stars[edge.toIndex];
-        if (!starA || !starB) continue;
+      ctx.beginPath();
+      ctx.arc(width * 0.82, height * 0.65, 200, 0, Math.PI * 2);
+      ctx.stroke();
 
-        ctx.strokeStyle = `rgba(0, 0, 0, ${edge.alpha * Math.min(starA.alpha, starB.alpha)})`;
+      ctx.beginPath();
+      ctx.ellipse(width * 0.5, height * 0.9, 320, 110, -0.2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      // Draw Constellation Lines between connected stars
+      if (constellationEdges.length > 0) {
         ctx.lineWidth = 0.6;
         ctx.setLineDash([2, 4]);
-        ctx.beginPath();
-        ctx.moveTo(starA.x, starA.y);
-        ctx.lineTo(starB.x, starB.y);
-        ctx.stroke();
+
+        for (let i = 0; i < constellationEdges.length; i++) {
+          const edge = constellationEdges[i];
+          const starA = stars[edge.fromIndex];
+          const starB = stars[edge.toIndex];
+          if (!starA || !starB) continue;
+
+          ctx.strokeStyle = getCachedAlphaColor(edge.alpha * Math.min(starA.alpha, starB.alpha));
+          ctx.beginPath();
+          ctx.moveTo(starA.x, starA.y);
+          ctx.lineTo(starB.x, starB.y);
+          ctx.stroke();
+        }
       }
 
-      // Update & Draw Stars
+      // Update and Draw Stars
       for (let i = 0; i < stars.length; i++) {
         const s = stars[i];
 
+        // Twinkle phase
         s.phase += s.twinkleSpeed * delta;
         const shimmer = Math.sin(s.phase);
-        s.alpha = Math.max(0.12, Math.min(1, s.baseAlpha + shimmer * 0.35));
+        s.alpha = Math.max(0.15, Math.min(1, s.baseAlpha + shimmer * 0.3));
+
+        // Rotation
         s.rotation += s.rotSpeed * delta;
 
+        // Parallax position
         s.x = s.baseX + currentParallaxX * s.depth;
         s.y = s.baseY + currentParallaxY * s.depth;
 
         if (s.type === 'sparkle') {
           const currentSize = s.size * (1 + shimmer * 0.15);
-          draw4PointSparkle(ctx, s.x, s.y, currentSize, s.rotation, s.alpha);
+          draw4PointSparkle(s.x, s.y, currentSize, s.rotation, s.alpha);
         } else if (s.type === 'ring') {
-          ctx.strokeStyle = `rgba(0, 0, 0, ${s.alpha * 0.6})`;
+          // Celestial orbital star
+          ctx.strokeStyle = getCachedAlphaColor(s.alpha * 0.6);
           ctx.lineWidth = 0.8;
           ctx.setLineDash([]);
           ctx.beginPath();
           ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
           ctx.stroke();
 
-          ctx.fillStyle = `rgba(0, 0, 0, ${s.alpha})`;
+          // Central solid black core
+          ctx.fillStyle = getCachedAlphaColor(s.alpha);
           ctx.beginPath();
           ctx.arc(s.x, s.y, 1.2, 0, Math.PI * 2);
           ctx.fill();
         } else {
-          ctx.fillStyle = `rgba(0, 0, 0, ${s.alpha})`;
+          // Standard circular star
+          ctx.fillStyle = getCachedAlphaColor(s.alpha);
           ctx.beginPath();
           ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
           ctx.fill();
         }
       }
 
-      // Spawn shooting star if ready
+      // Check for shooting star spawn
       if (Date.now() > nextShootingStarTime) {
         spawnShootingStar();
       }
 
-      // Update & Draw Shooting Stars (Using REUSED offscreen gradient canvas: Zero runtime gradient allocations!)
-      for (let i = shootingStars.length - 1; i >= 0; i--) {
-        const m = shootingStars[i];
-        m.life += delta;
-        const progress = m.life / m.maxLife;
+      // Update and Draw Shooting Stars
+      if (shootingStars.length > 0) {
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([]);
 
-        if (progress >= 1) {
-          shootingStars.splice(i, 1);
-          continue;
+        for (let i = shootingStars.length - 1; i >= 0; i--) {
+          const m = shootingStars[i];
+          m.life += delta;
+          const progress = m.life / m.maxLife;
+
+          if (progress >= 1) {
+            shootingStars.splice(i, 1);
+            continue;
+          }
+
+          m.x += Math.cos(m.angle) * m.speed * delta;
+          m.y += Math.sin(m.angle) * m.speed * delta;
+
+          const currentAlpha =
+            progress < 0.2
+              ? (progress / 0.2) * m.alpha
+              : (1 - (progress - 0.2) / 0.8) * m.alpha;
+
+          const tailX = m.x - Math.cos(m.angle) * m.length * (1 - progress * 0.4);
+          const tailY = m.y - Math.sin(m.angle) * m.length * (1 - progress * 0.4);
+
+          ctx.strokeStyle = getCachedAlphaColor(currentAlpha * 0.7);
+          ctx.beginPath();
+          ctx.moveTo(tailX, tailY);
+          ctx.lineTo(m.x, m.y);
+          ctx.stroke();
+
+          draw4PointSparkle(m.x, m.y, 2.5, m.angle, currentAlpha);
         }
-
-        m.x += Math.cos(m.angle) * m.speed * delta;
-        m.y += Math.sin(m.angle) * m.speed * delta;
-
-        const currentAlpha =
-          progress < 0.2
-            ? (progress / 0.2) * m.alpha
-            : (1 - (progress - 0.2) / 0.8) * m.alpha;
-
-        const tailLen = m.length * (1 - progress * 0.4);
-        const tailX = m.x - Math.cos(m.angle) * tailLen;
-        const tailY = m.y - Math.sin(m.angle) * tailLen;
-
-        // Draw meteor trail via reused cached linear gradient canvas
-        ctx.save();
-        ctx.translate(tailX, tailY);
-        ctx.rotate(m.angle);
-        ctx.globalAlpha = currentAlpha;
-        ctx.drawImage(cachedTail, 0, -0.6, tailLen, 1.2);
-        ctx.restore();
-
-        // Meteor head spark
-        draw4PointSparkle(ctx, m.x, m.y, 3, m.angle, currentAlpha);
       }
     };
 
+    // Pause animation when page is hidden to save battery, CPU and prevent memory leak
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        isPaused = true;
+        if (animFrameId !== null) {
+          cancelAnimationFrame(animFrameId);
+          animFrameId = null;
+        }
+      } else {
+        if (isPaused) {
+          isPaused = false;
+          lastTime = performance.now();
+          animFrameId = requestAnimationFrame(render);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     animFrameId = requestAnimationFrame(render);
 
     return () => {
-      cancelAnimationFrame(animFrameId);
-      window.removeEventListener('resize', setupCanvas);
+      if (animFrameId !== null) {
+        cancelAnimationFrame(animFrameId);
+      }
+      if (resizeTimer) clearTimeout(resizeTimer);
+      window.removeEventListener('resize', handleResize);
       window.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [performanceMode]);
+  }, []);
 
   return (
     <canvas
@@ -485,3 +409,4 @@ export const StarrySpaceBackground: React.FC<StarrySpaceBackgroundProps> = ({
     />
   );
 };
+

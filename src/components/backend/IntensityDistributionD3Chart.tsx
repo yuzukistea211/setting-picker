@@ -256,7 +256,9 @@ export const IntensityDistributionD3Chart: React.FC<IntensityDistributionD3Chart
           .attr('fill', '#000000');
       });
 
-    // Interactive hover
+    // Interactive hover with RAF throttling to prevent high-frequency re-renders & layout thrashing
+    let rafId: number | null = null;
+
     groupG
       .on('mouseenter', (event: MouseEvent, d: IntensityDataPoint) => {
         const rect = containerRef.current?.getBoundingClientRect();
@@ -269,18 +271,34 @@ export const IntensityDistributionD3Chart: React.FC<IntensityDistributionD3Chart
         setHoveredLevel(d);
       })
       .on('mousemove', (event: MouseEvent) => {
-        const rect = containerRef.current?.getBoundingClientRect();
-        if (rect) {
-          setTooltipPos({
-            x: event.clientX - rect.left,
-            y: event.clientY - rect.top,
-          });
-        }
+        if (rafId !== null) return;
+        const clientX = event.clientX;
+        const clientY = event.clientY;
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          const rect = containerRef.current?.getBoundingClientRect();
+          if (rect) {
+            setTooltipPos({
+              x: clientX - rect.left,
+              y: clientY - rect.top,
+            });
+          }
+        });
       })
       .on('mouseleave', () => {
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
         setHoveredLevel(null);
         setTooltipPos(null);
       });
+
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      groupG.on('mouseenter', null).on('mousemove', null).on('mouseleave', null);
+      svg.selectAll('*').remove();
+    };
   }, [dataPoints]);
 
   const isWellAligned = maxDiff <= 2.5;

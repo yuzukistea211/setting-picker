@@ -20,27 +20,6 @@ export default function App() {
   const [pinnedTraitId, setPinnedTraitId] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
 
-  // Performance mode (Low memory / Static starry background)
-  const [performanceMode, setPerformanceMode] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('oc_performance_mode') === 'true';
-    } catch {
-      return false;
-    }
-  });
-
-  const handleTogglePerformanceMode = () => {
-    setPerformanceMode((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem('oc_performance_mode', String(next));
-      } catch {
-        // ignore
-      }
-      return next;
-    });
-  };
-
   // Results & In-page History
   const [currentResult, setCurrentResult] = useState<ExtractionResult | null>(null);
   const [history, setHistory] = useState<ExtractionResult[]>([]);
@@ -143,7 +122,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-transparent text-black flex flex-col selection:bg-black selection:text-white relative">
       {/* White Space Starry Background */}
-      <StarrySpaceBackground performanceMode={performanceMode} />
+      <StarrySpaceBackground />
 
       {/* Top Navigation */}
       <Navbar
@@ -152,8 +131,6 @@ export default function App() {
         dataset={dataset}
         onImportDataset={handleImportDataset}
         onResetDataset={handleResetDataset}
-        performanceMode={performanceMode}
-        onTogglePerformanceMode={handleTogglePerformanceMode}
       />
 
       {/* Main Workspace Area */}
