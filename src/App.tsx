@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Dataset, ExtractionResult, IntensityLevel } from './types';
+import { Dataset, ExtractionResult, IntensityLevel, Trait, ExtractedTraitItem } from './types';
 import { DEFAULT_DATASET } from './data/defaultTraits';
 import { loadDataset, resetToDefaultDataset, saveDataset } from './lib/storage';
 import { generateOC, evaluateWeakCompatibilities } from './lib/generator';
@@ -7,11 +7,12 @@ import { Navbar } from './components/Navbar';
 import { ExtractorPanel } from './components/frontend/ExtractorPanel';
 import { ResultPanel } from './components/frontend/ResultPanel';
 import { BackendDashboard } from './components/backend/BackendDashboard';
+import { RelationshipNetworkView } from './components/network/RelationshipNetworkView';
 import { StarrySpaceBackground } from './components/StarrySpaceBackground';
 
 export default function App() {
   const [dataset, setDataset] = useState<Dataset>(DEFAULT_DATASET);
-  const [currentTab, setCurrentTab] = useState<'frontend' | 'backend'>('frontend');
+  const [currentTab, setCurrentTab] = useState<'frontend' | 'backend' | 'network'>('frontend');
   const [isLoadingDB, setIsLoadingDB] = useState<boolean>(true);
 
   // Frontend extraction settings
@@ -74,17 +75,85 @@ export default function App() {
     setIsGenerating(true);
     setTimeout(() => {
       try {
+        const lockedTraits = currentResult?.traits.filter((t) => t.locked) || [];
         const result = generateOC(dataset, {
-          count: traitCount,
+          count: Math.max(traitCount, lockedTraits.length),
           specifiedAxes: selectedAxes,
           pinnedTraitIds: pinnedTraitId ? [pinnedTraitId] : [],
+          lockedTraits,
         });
+
+        // Preserve characterName & notes if already typed in current session
+        if (currentResult?.characterName) {
+          result.characterName = currentResult.characterName;
+        }
+        if (currentResult?.notes) {
+          result.notes = currentResult.notes;
+        }
+
         setCurrentResult(result);
         setHistory((prev) => [result, ...prev.slice(0, 19)]);
       } finally {
         setIsGenerating(false);
       }
     }, 150);
+  };
+
+  // Toggle lock state of a trait in current result
+  const handleToggleLockTrait = (index: number) => {
+    if (!currentResult) return;
+    const updatedTraits = currentResult.traits.map((item, i) =>
+      i === index ? { ...item, locked: !item.locked } : item,
+    );
+    const updatedResult: ExtractionResult = {
+      ...currentResult,
+      traits: updatedTraits,
+    };
+    setCurrentResult(updatedResult);
+    setHistory((prev) =>
+      prev.map((h) => (h.id === updatedResult.id ? updatedResult : h)),
+    );
+  };
+
+  // Remove a trait from current result
+  const handleRemoveTrait = (index: number) => {
+    if (!currentResult) return;
+    const updatedTraits = currentResult.traits.filter((_, i) => i !== index);
+    const updatedWeakCompat = evaluateWeakCompatibilities(updatedTraits, dataset);
+    const updatedResult: ExtractionResult = {
+      ...currentResult,
+      traits: updatedTraits,
+      weakCompatibilities: updatedWeakCompat,
+    };
+    setCurrentResult(updatedResult);
+    setHistory((prev) =>
+      prev.map((h) => (h.id === updatedResult.id ? updatedResult : h)),
+    );
+  };
+
+  // Add a new trait to current result
+  const handleAddTrait = (trait: Trait, intensity: IntensityLevel, locked: boolean = false) => {
+    if (!currentResult) return;
+    if (currentResult.traits.some((t) => t.trait.id === trait.id)) {
+      return;
+    }
+    const newItem: ExtractedTraitItem = {
+      trait,
+      intensity,
+      axis: trait.axis,
+      locked,
+    };
+    const updatedTraits = [...currentResult.traits, newItem];
+    const updatedWeakCompat = evaluateWeakCompatibilities(updatedTraits, dataset);
+    const updatedResult: ExtractionResult = {
+      ...currentResult,
+      traits: updatedTraits,
+      weakCompatibilities: updatedWeakCompat,
+    };
+    setCurrentResult(updatedResult);
+    setHistory((prev) =>
+      prev.map((h) => (h.id === updatedResult.id ? updatedResult : h)),
+    );
   };
 
   // Update intensity of a specific trait in current result
@@ -155,21 +224,28 @@ export default function App() {
               onSelectPinnedTrait={setPinnedTraitId}
               onGenerate={handleGenerate}
               isGenerating={isGenerating}
+              lockedCount={currentResult?.traits.filter((t) => t.locked).length || 0}
             />
 
             <ResultPanel
               currentResult={currentResult}
               history={history}
+              dataset={dataset}
               onSelectHistoryItem={setCurrentResult}
               onClearHistory={() => setHistory([])}
-              onReroll={handleGenerate}
               onUpdateTraitIntensity={handleUpdateTraitIntensity}
               onUpdateNotes={handleUpdateNotes}
+              onToggleLockTrait={handleToggleLockTrait}
+              onRemoveTrait={handleRemoveTrait}
+              onAddTrait={handleAddTrait}
             />
           </div>
-        ) : (
+        ) : currentTab === 'backend' ? (
           /* Backend: Comprehensive Dashboard */
           <BackendDashboard dataset={dataset} onSaveDataset={handleSaveDataset} />
+        ) : (
+          /* Network: Character Relationship Network */
+          <RelationshipNetworkView />
         )}
       </main>
     </div>

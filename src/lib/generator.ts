@@ -123,6 +123,7 @@ export interface GeneratorOptions {
   count?: number;
   specifiedAxes?: string[];
   pinnedTraitIds?: string[];
+  lockedTraits?: ExtractedTraitItem[];
   customDataset?: Dataset;
 }
 
@@ -187,17 +188,44 @@ export function generateOC(
   const selectedItems: ExtractedTraitItem[] = [];
   const selectedTraitIds = new Set<string>();
 
-  // 1. First add any pinned traits
+  // 1. First add any locked traits (retain their intensity, axis, and locked state)
+  if (options.lockedTraits && options.lockedTraits.length > 0) {
+    for (const lockedItem of options.lockedTraits) {
+      // Ensure the trait still exists in dataset
+      const traitExists = dataset.traits.find((t) => t.id === lockedItem.trait.id);
+      if (traitExists && !selectedTraitIds.has(traitExists.id)) {
+        selectedItems.push({
+          trait: traitExists,
+          intensity: lockedItem.intensity,
+          axis: traitExists.axis,
+          locked: true,
+        });
+        selectedTraitIds.add(traitExists.id);
+      }
+    }
+  }
+
+  // 2. Add any pinned traits if not already selected and not hard-excluded
   if (pinnedIds.size > 0) {
     for (const pinnedId of pinnedIds) {
+      if (selectedTraitIds.has(pinnedId)) continue;
       const trait = dataset.traits.find((t) => t.id === pinnedId);
       if (trait) {
-        selectedItems.push({
-          trait,
-          intensity: sampleIntensity(),
-          axis: trait.axis,
-        });
-        selectedTraitIds.add(trait.id);
+        let hardConflict = false;
+        for (const item of selectedItems) {
+          if (isHardExcluded(trait.id, item.trait.id, dataset).excluded) {
+            hardConflict = true;
+            break;
+          }
+        }
+        if (!hardConflict) {
+          selectedItems.push({
+            trait,
+            intensity: sampleIntensity(),
+            axis: trait.axis,
+          });
+          selectedTraitIds.add(trait.id);
+        }
       }
     }
   }

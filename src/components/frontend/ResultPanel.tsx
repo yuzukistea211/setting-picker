@@ -1,27 +1,65 @@
-import React, { useState } from 'react';
-import { Copy, Check, History, AlertTriangle, ArrowRight, FileText, User } from 'lucide-react';
-import { ExtractionResult, IntensityLevel, ALL_INTENSITIES } from '../../types';
+import React, { useState, useMemo } from 'react';
+import {
+  Copy,
+  Check,
+  History,
+  AlertTriangle,
+  ArrowRight,
+  FileText,
+  User,
+  Lock,
+  Unlock,
+  Plus,
+  Trash2,
+  Download,
+  X,
+  Search,
+  CheckCircle2,
+} from 'lucide-react';
+import {
+  ExtractionResult,
+  IntensityLevel,
+  ALL_INTENSITIES,
+  Trait,
+  Dataset,
+} from '../../types';
+import { isHardExcluded } from '../../lib/generator';
 
 interface ResultPanelProps {
   currentResult: ExtractionResult | null;
   history: ExtractionResult[];
+  dataset: Dataset;
   onSelectHistoryItem: (item: ExtractionResult) => void;
   onClearHistory: () => void;
-  onReroll: () => void;
   onUpdateTraitIntensity: (traitIndex: number, newIntensity: IntensityLevel) => void;
   onUpdateNotes: (characterName: string, notes: string) => void;
+  onToggleLockTrait: (traitIndex: number) => void;
+  onRemoveTrait: (traitIndex: number) => void;
+  onAddTrait: (trait: Trait, intensity: IntensityLevel, locked?: boolean) => void;
 }
 
 export const ResultPanel: React.FC<ResultPanelProps> = ({
   currentResult,
   history,
+  dataset,
   onSelectHistoryItem,
   onClearHistory,
-  onReroll,
   onUpdateTraitIntensity,
   onUpdateNotes,
+  onToggleLockTrait,
+  onRemoveTrait,
+  onAddTrait,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [exported, setExported] = useState(false);
+
+  // Add Trait Modal State
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [selectedAxisFilter, setSelectedAxisFilter] = useState('ALL');
+  const [candidateTrait, setCandidateTrait] = useState<Trait | null>(null);
+  const [candidateIntensity, setCandidateIntensity] = useState<IntensityLevel>('中等');
+  const [candidateLock, setCandidateLock] = useState(false);
 
   const handleCopyText = () => {
     if (!currentResult) return;
@@ -38,7 +76,8 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
 
     text += `─── 性格與心理詞條 ───\n`;
     currentResult.traits.forEach((item, index) => {
-      text += `${index + 1}. [${item.axis}] 【${item.intensity}】${item.trait.name}\n   ${item.trait.description}\n`;
+      const lockMark = item.locked ? ' [🔒已鎖定]' : '';
+      text += `${index + 1}. [${item.axis}] 【${item.intensity}】${item.trait.name}${lockMark}\n   ${item.trait.description}\n`;
     });
 
     if (currentResult.weakCompatibilities.length > 0) {
@@ -52,6 +91,53 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
+  };
+
+  const handleExportJSON = () => {
+    if (!currentResult) return;
+
+    const dataToExport = {
+      version: '1.0',
+      id: currentResult.id,
+      characterName: currentResult.characterName || '',
+      timestamp: currentResult.timestamp,
+      exportedAt: new Date().toISOString(),
+      notes: currentResult.notes || '',
+      specifiedAxes: currentResult.specifiedAxes || [],
+      traits: currentResult.traits.map((t) => ({
+        id: t.trait.id,
+        name: t.trait.name,
+        axis: t.axis,
+        intensity: t.intensity,
+        description: t.trait.description,
+      })),
+      weakCompatibilities: currentResult.weakCompatibilities.map((wc) => ({
+        traitA: { id: wc.traitA.id, name: wc.traitA.name, axis: wc.traitA.axis },
+        intensityA: wc.intensityA,
+        traitB: { id: wc.traitB.id, name: wc.traitB.name, axis: wc.traitB.axis },
+        intensityB: wc.intensityB,
+        reasonType: wc.reasonType,
+        score: wc.score,
+        note: wc.note,
+      })),
+    };
+
+    const jsonString = JSON.stringify(dataToExport, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const safeName = (currentResult.characterName || 'character')
+      .trim()
+      .replace(/[^a-zA-Z0-9\u4e00-\u9fa5_-]/g, '_');
+    link.href = url;
+    link.download = `oc-${safeName}-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setExported(true);
+    setTimeout(() => setExported(false), 2000);
   };
 
   const getIntensityBadgeClass = (intensity: IntensityLevel) => {
@@ -71,6 +157,59 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
     }
   };
 
+  // Trait sets currently in result for fast check
+  const presentTraitIds = useMemo(() => {
+    if (!currentResult) return new Set<string>();
+    return new Set(currentResult.traits.map((t) => t.trait.id));
+  }, [currentResult]);
+
+  // Locked traits count
+  const lockedCount = useMemo(() => {
+    if (!currentResult) return 0;
+    return currentResult.traits.filter((t) => t.locked).length;
+  }, [currentResult]);
+
+  // Filtered traits for Add Modal
+  const availableCandidateTraits = useMemo(() => {
+    const kw = searchKeyword.trim().toLowerCase();
+    return dataset.traits.filter((t) => {
+      if (selectedAxisFilter !== 'ALL' && t.axis !== selectedAxisFilter) {
+        return false;
+      }
+      if (kw) {
+        const matchesName = t.name.toLowerCase().includes(kw);
+        const matchesDesc = t.description.toLowerCase().includes(kw);
+        const matchesAxis = t.axis.toLowerCase().includes(kw);
+        if (!matchesName && !matchesDesc && !matchesAxis) return false;
+      }
+      return true;
+    });
+  }, [dataset.traits, selectedAxisFilter, searchKeyword]);
+
+  // Check hard exclusions for a candidate with current traits
+  const checkCandidateConflicts = (trait: Trait) => {
+    if (!currentResult) return null;
+    for (const item of currentResult.traits) {
+      const exclusion = isHardExcluded(trait.id, item.trait.id, dataset);
+      if (exclusion.excluded) {
+        return {
+          conflictingTrait: item.trait,
+          reason: exclusion.reason || '邏輯不共存',
+        };
+      }
+    }
+    return null;
+  };
+
+  const handleConfirmAddTrait = () => {
+    if (!candidateTrait) return;
+    onAddTrait(candidateTrait, candidateIntensity, candidateLock);
+    setIsAddModalOpen(false);
+    setCandidateTrait(null);
+    setCandidateIntensity('中等');
+    setCandidateLock(false);
+  };
+
   return (
     <section
       id="panel-result"
@@ -78,13 +217,22 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
     >
       {/* Top action bar */}
       <div className="flex flex-wrap items-center justify-between border-b-2 border-black pb-3 gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-black tracking-wider uppercase">抽取結果</span>
           {currentResult && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
               {currentResult.characterName && (
                 <span className="text-xs font-bold bg-black text-white px-2 py-0.5">
                   {currentResult.characterName}
+                </span>
+              )}
+              {lockedCount > 0 && (
+                <span
+                  id="badge-locked-summary"
+                  className="text-xs font-mono font-bold border border-black bg-neutral-100 px-2 py-0.5 flex items-center gap-1"
+                >
+                  <Lock size={11} />
+                  <span>{lockedCount} 個詞條已鎖定</span>
                 </span>
               )}
             </div>
@@ -92,7 +240,20 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
         </div>
 
         {currentResult && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Export JSON Button */}
+            <button
+              id="btn-export-json"
+              type="button"
+              onClick={handleExportJSON}
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-black text-xs font-bold hover:bg-black hover:text-white transition-colors cursor-pointer"
+              title="匯出目前抽取結果為格式化 JSON 檔案"
+            >
+              {exported ? <Check size={14} /> : <Download size={14} />}
+              <span>{exported ? '已匯出 JSON' : '匯出 JSON'}</span>
+            </button>
+
+            {/* Copy Plaintext Button */}
             <button
               id="btn-copy-result"
               type="button"
@@ -102,13 +263,17 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
               {copied ? <Check size={14} /> : <Copy size={14} />}
               <span>{copied ? '已複製' : '複製純文字'}</span>
             </button>
+
+            {/* Add Trait Button replacing the reroll button */}
             <button
-              id="btn-reroll-result"
+              id="btn-add-trait"
               type="button"
-              onClick={onReroll}
-              className="px-3 py-1.5 border border-black bg-black text-white text-xs font-bold hover:bg-white hover:text-black transition-colors cursor-pointer"
+              onClick={() => setIsAddModalOpen(true)}
+              className="flex items-center gap-1 px-3 py-1.5 border border-black bg-black text-white text-xs font-bold hover:bg-white hover:text-black transition-colors cursor-pointer"
+              title="自由從心理學詞庫中加入新詞條至目前角色"
             >
-              重新抽取
+              <Plus size={14} />
+              <span>加入詞條</span>
             </button>
           </div>
         )}
@@ -142,57 +307,111 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
 
           {/* Traits Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {currentResult.traits.map((item, idx) => (
-              <div
-                key={item.trait.id + '-' + idx}
-                id={`card-trait-${item.trait.id}`}
-                className="border-2 border-black p-3.5 bg-white flex flex-col justify-between gap-3"
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-2 mb-1.5">
-                    {/* Interactive Intensity Select Dropdown */}
-                    <div className="flex items-center gap-1">
-                      <label htmlFor={`select-intensity-${idx}`} className="sr-only">
-                        詞條強度
-                      </label>
-                      <select
-                        id={`select-intensity-${idx}`}
-                        value={item.intensity}
-                        onChange={(e) =>
-                          onUpdateTraitIntensity(idx, e.target.value as IntensityLevel)
-                        }
-                        title="點擊更改詞條強度"
-                        className={`text-xs px-2 py-0.5 tracking-wider cursor-pointer outline-none transition-colors ${getIntensityBadgeClass(
-                          item.intensity,
-                        )}`}
-                      >
-                        {ALL_INTENSITIES.map((lvl) => (
-                          <option
-                            key={lvl}
-                            value={lvl}
-                            className="bg-white text-black font-normal"
-                          >
-                            {lvl}
-                          </option>
-                        ))}
-                      </select>
+            {currentResult.traits.map((item, idx) => {
+              const isLocked = !!item.locked;
+              return (
+                <div
+                  key={item.trait.id + '-' + idx}
+                  id={`card-trait-${item.trait.id}`}
+                  className={`border-2 border-black p-3.5 bg-white flex flex-col justify-between gap-3 transition-shadow ${
+                    isLocked ? 'ring-2 ring-black bg-neutral-50/70 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : ''
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      {/* Interactive Intensity Select Dropdown */}
+                      <div className="flex items-center gap-1">
+                        <label htmlFor={`select-intensity-${idx}`} className="sr-only">
+                          詞條強度
+                        </label>
+                        <select
+                          id={`select-intensity-${idx}`}
+                          value={item.intensity}
+                          onChange={(e) =>
+                            onUpdateTraitIntensity(idx, e.target.value as IntensityLevel)
+                          }
+                          title="點擊更改詞條強度"
+                          className={`text-xs px-2 py-0.5 tracking-wider cursor-pointer outline-none transition-colors ${getIntensityBadgeClass(
+                            item.intensity,
+                          )}`}
+                        >
+                          {ALL_INTENSITIES.map((lvl) => (
+                            <option
+                              key={lvl}
+                              value={lvl}
+                              className="bg-white text-black font-normal"
+                            >
+                              {lvl}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Right controls: Axis tag, Lock toggle, Remove button */}
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] font-mono border border-black px-1.5 py-0.5">
+                          {item.axis}
+                        </span>
+
+                        {/* Lock / Unlock Toggle Button */}
+                        <button
+                          id={`btn-lock-trait-${idx}`}
+                          type="button"
+                          onClick={() => onToggleLockTrait(idx)}
+                          className={`flex items-center gap-1 px-1.5 py-0.5 text-[11px] font-mono font-bold border transition-colors cursor-pointer ${
+                            isLocked
+                              ? 'border-black bg-black text-white hover:bg-neutral-800'
+                              : 'border-neutral-300 bg-white text-neutral-600 hover:border-black hover:text-black'
+                          }`}
+                          title={isLocked ? '點擊解除鎖定' : '點擊鎖定詞條（重新抽取時將保留此詞條與強度）'}
+                        >
+                          {isLocked ? <Lock size={12} /> : <Unlock size={12} />}
+                          <span>{isLocked ? '已鎖定' : '鎖定'}</span>
+                        </button>
+
+                        {/* Remove Trait Button */}
+                        <button
+                          id={`btn-remove-trait-${idx}`}
+                          type="button"
+                          onClick={() => onRemoveTrait(idx)}
+                          className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] font-mono border border-neutral-300 hover:border-black text-neutral-500 hover:text-white hover:bg-black transition-colors cursor-pointer"
+                          title="自目前角色中移除此詞條"
+                        >
+                          <Trash2 size={12} />
+                          <span className="sr-only sm:not-sr-only">移除</span>
+                        </button>
+                      </div>
                     </div>
 
-                    <span className="text-[11px] font-mono border border-black px-1.5 py-0.5">
-                      {item.axis}
-                    </span>
+                    <h3 className="text-base font-black tracking-tight text-black mt-1 flex items-center gap-1.5">
+                      {isLocked && <Lock size={14} className="shrink-0 text-black" />}
+                      <span>{item.trait.name}</span>
+                    </h3>
                   </div>
 
-                  <h3 className="text-base font-black tracking-tight text-black mt-1">
-                    {item.trait.name}
-                  </h3>
+                  <p className="text-xs text-neutral-800 leading-relaxed border-t border-black pt-2">
+                    {item.trait.description}
+                  </p>
                 </div>
+              );
+            })}
 
-                <p className="text-xs text-neutral-800 leading-relaxed border-t border-black pt-2">
-                  {item.trait.description}
-                </p>
+            {/* Quick Add Card at the end of the traits grid */}
+            <button
+              id="btn-add-trait-card"
+              type="button"
+              onClick={() => setIsAddModalOpen(true)}
+              className="border-2 border-dashed border-black/40 hover:border-black p-4 bg-neutral-50/40 hover:bg-neutral-50 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all min-h-[120px] group"
+              title="自由挑選心理學詞庫中的詞條加入角色"
+            >
+              <div className="p-2 border border-black rounded-full bg-white group-hover:bg-black group-hover:text-white transition-colors">
+                <Plus size={16} />
               </div>
-            ))}
+              <span className="text-xs font-black tracking-wide">+ 加入詞條</span>
+              <span className="text-[11px] font-mono text-neutral-500">
+                點擊瀏覽詞庫自由擴充角色詞條
+              </span>
+            </button>
           </div>
 
           {/* Weak Compatibility (弱相容) Section */}
@@ -375,7 +594,7 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
                     </div>
                     <div className="truncate text-xs">
                       {hist.traits
-                        .map((t) => `【${t.intensity}】${t.trait.name}`)
+                        .map((t) => `【${t.intensity}】${t.trait.name}${t.locked ? '🔒' : ''}`)
                         .join(' · ')}
                     </div>
                   </div>
@@ -387,6 +606,234 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
           </div>
         )}
       </div>
+
+      {/* Add Trait Modal Dialog */}
+      {isAddModalOpen && (
+        <div
+          id="modal-add-trait"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsAddModalOpen(false);
+          }}
+        >
+          <div
+            className="w-full max-w-2xl bg-white border-2 border-black p-5 flex flex-col gap-4 shadow-2xl max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-100"
+            role="dialog"
+            aria-modal="true"
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b-2 border-black pb-3">
+              <div className="flex items-center gap-2">
+                <Plus size={18} className="font-black" />
+                <h2 className="text-sm font-black tracking-wider uppercase">
+                  自由加入詞條至目前角色
+                </h2>
+              </div>
+              <button
+                id="btn-close-add-modal"
+                type="button"
+                onClick={() => setIsAddModalOpen(false)}
+                className="p-1 border border-black hover:bg-black hover:text-white transition-colors cursor-pointer"
+                title="關閉"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Filter Controls: Search & Axis Chips */}
+            <div className="flex flex-col gap-2.5">
+              {/* Search Bar */}
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+                <input
+                  id="input-search-candidate-traits"
+                  type="text"
+                  value={searchKeyword}
+                  onChange={(e) => setSearchKeyword(e.target.value)}
+                  placeholder="搜尋詞條名稱、軸線或心理學描述..."
+                  className="w-full pl-9 pr-8 py-2 text-xs border border-black focus:outline-none focus:bg-neutral-50"
+                  autoFocus
+                />
+                {searchKeyword && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchKeyword('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-black cursor-pointer"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+
+              {/* Axis Filter Pills */}
+              <div className="flex flex-wrap gap-1 items-center max-h-20 overflow-y-auto py-0.5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedAxisFilter('ALL')}
+                  className={`px-2 py-0.5 text-[11px] font-mono border transition-colors cursor-pointer ${
+                    selectedAxisFilter === 'ALL'
+                      ? 'border-black bg-black text-white font-bold'
+                      : 'border-neutral-300 bg-white text-neutral-600 hover:border-black'
+                  }`}
+                >
+                  全部軸線
+                </button>
+                {dataset.axes.map((axis) => (
+                  <button
+                    key={axis.id}
+                    type="button"
+                    onClick={() => setSelectedAxisFilter(axis.name)}
+                    className={`px-2 py-0.5 text-[11px] font-mono border transition-colors cursor-pointer ${
+                      selectedAxisFilter === axis.name
+                        ? 'border-black bg-black text-white font-bold'
+                        : 'border-neutral-300 bg-white text-neutral-600 hover:border-black'
+                    }`}
+                  >
+                    {axis.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Available Traits Selection List */}
+            <div className="flex-1 overflow-y-auto border border-black max-h-64 p-2 flex flex-col gap-1.5 divide-y divide-neutral-200">
+              {availableCandidateTraits.length === 0 ? (
+                <div className="py-8 text-center text-xs font-mono text-neutral-500">
+                  沒有找到符合條件的詞條
+                </div>
+              ) : (
+                availableCandidateTraits.map((t) => {
+                  const isPresent = presentTraitIds.has(t.id);
+                  const isSelected = candidateTrait?.id === t.id;
+                  const conflict = checkCandidateConflicts(t);
+
+                  return (
+                    <div
+                      key={t.id}
+                      onClick={() => {
+                        if (!isPresent) {
+                          setCandidateTrait(t);
+                        }
+                      }}
+                      className={`p-2.5 flex flex-col gap-1.5 text-xs transition-colors cursor-pointer ${
+                        isPresent
+                          ? 'opacity-40 bg-neutral-100 cursor-not-allowed'
+                          : isSelected
+                          ? 'bg-neutral-100 border-2 border-black font-medium'
+                          : 'hover:bg-neutral-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-sm">{t.name}</span>
+                          <span className="text-[10px] font-mono border border-black px-1.5 py-0.2">
+                            {t.axis}
+                          </span>
+                          {isPresent && (
+                            <span className="text-[10px] font-mono bg-neutral-300 text-neutral-700 px-1 py-0.2">
+                              已在角色中
+                            </span>
+                          )}
+                          {conflict && !isPresent && (
+                            <span className="text-[10px] font-mono bg-amber-100 text-amber-900 border border-amber-600 px-1.5 py-0.2 flex items-center gap-1">
+                              <AlertTriangle size={10} />
+                              <span>與「{conflict.conflictingTrait.name}」互斥</span>
+                            </span>
+                          )}
+                        </div>
+
+                        {isSelected && !isPresent && (
+                          <span className="text-[11px] font-bold text-black flex items-center gap-1">
+                            <CheckCircle2 size={14} /> 已選取
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-[11px] text-neutral-600 leading-snug line-clamp-2">
+                        {t.description}
+                      </p>
+
+                      {conflict && !isPresent && (
+                        <p className="text-[10px] font-mono text-amber-900 bg-amber-50 p-1 border-l-2 border-amber-500">
+                          互斥原因：{conflict.reason}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Selected Trait Settings (Intensity & Lock) */}
+            {candidateTrait && (
+              <div className="border-2 border-black p-3 bg-neutral-50 flex flex-col gap-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-black">
+                    即將加入：【{candidateTrait.name}】
+                  </span>
+                  <span className="text-[10px] font-mono border border-black px-1">
+                    {candidateTrait.axis}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-black/20">
+                  {/* Intensity Choice */}
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="select-candidate-intensity" className="text-xs font-bold">
+                      詞條強度：
+                    </label>
+                    <select
+                      id="select-candidate-intensity"
+                      value={candidateIntensity}
+                      onChange={(e) => setCandidateIntensity(e.target.value as IntensityLevel)}
+                      className="border border-black bg-white px-2 py-1 text-xs font-bold focus:outline-none cursor-pointer"
+                    >
+                      {ALL_INTENSITIES.map((lvl) => (
+                        <option key={lvl} value={lvl}>
+                          {lvl}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Lock Checkbox */}
+                  <label className="flex items-center gap-1.5 text-xs font-bold cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={candidateLock}
+                      onChange={(e) => setCandidateLock(e.target.checked)}
+                      className="cursor-pointer"
+                    />
+                    <Lock size={12} />
+                    <span>加入時自動鎖定</span>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2 border-t border-black pt-3">
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(false)}
+                className="px-3 py-1.5 border border-black text-xs font-bold hover:bg-neutral-100 transition-colors cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                id="btn-confirm-add-trait"
+                type="button"
+                disabled={!candidateTrait}
+                onClick={handleConfirmAddTrait}
+                className="px-4 py-1.5 border border-black bg-black text-white text-xs font-black hover:bg-white hover:text-black transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+              >
+                <Plus size={14} />
+                <span>確認加入抽取結果</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 };

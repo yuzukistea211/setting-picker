@@ -1,10 +1,10 @@
 import React, { useRef } from 'react';
-import { Download, Upload, RotateCcw, Sliders, Dices } from 'lucide-react';
+import { Download, Upload, RotateCcw, Sliders, Dices, Network } from 'lucide-react';
 import { Dataset } from '../types';
 
 interface NavbarProps {
-  currentTab: 'frontend' | 'backend';
-  onTabChange: (tab: 'frontend' | 'backend') => void;
+  currentTab: 'frontend' | 'backend' | 'network';
+  onTabChange: (tab: 'frontend' | 'backend' | 'network') => void;
   dataset: Dataset;
   onImportDataset: (dataset: Dataset) => void;
   onResetDataset: () => void;
@@ -91,6 +91,19 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Sliders size={16} />
             <span>後台控制台</span>
+          </button>
+          <button
+            id="nav-tab-network"
+            type="button"
+            onClick={() => onTabChange('network')}
+            className={`flex items-center gap-1.5 px-4 py-1.5 text-sm font-bold transition-colors cursor-pointer border-l border-black ${
+              currentTab === 'network'
+                ? 'bg-black text-white'
+                : 'bg-white text-black hover:bg-neutral-100'
+            }`}
+          >
+            <Network size={16} />
+            <span>角色關係網</span>
           </button>
         </div>
 

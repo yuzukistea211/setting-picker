@@ -1,5 +1,5 @@
 import React from 'react';
-import { BotMessageSquare, RefreshCw, X, CheckSquare, Square } from 'lucide-react';
+import { BotMessageSquare, RefreshCw, X, CheckSquare, Square, Lock } from 'lucide-react';
 import { AxisDefinition, Trait } from '../../types';
 
 interface ExtractorPanelProps {
@@ -15,6 +15,7 @@ interface ExtractorPanelProps {
   onSelectPinnedTrait: (traitId: string) => void;
   onGenerate: () => void;
   isGenerating: boolean;
+  lockedCount?: number;
 }
 
 export const ExtractorPanel: React.FC<ExtractorPanelProps> = ({
@@ -30,6 +31,7 @@ export const ExtractorPanel: React.FC<ExtractorPanelProps> = ({
   onSelectPinnedTrait,
   onGenerate,
   isGenerating,
+  lockedCount = 0,
 }) => {
   return (
     <aside
@@ -159,6 +161,16 @@ export const ExtractorPanel: React.FC<ExtractorPanelProps> = ({
 
       {/* Action Buttons */}
       <div className="flex flex-col gap-2 pt-4 border-t-2 border-black">
+        {lockedCount > 0 && (
+          <div
+            id="status-locked-traits-info"
+            className="flex items-center gap-1.5 p-2 border border-black bg-neutral-100 text-xs font-mono font-bold text-black"
+          >
+            <Lock size={13} className="shrink-0" />
+            <span>已鎖定 {lockedCount} 個詞條（抽取時將予以保留）</span>
+          </div>
+        )}
+
         <button
           id="btn-generate-oc"
           type="button"
