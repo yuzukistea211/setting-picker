@@ -191,18 +191,28 @@ export function generateOC(
       (axis) => !satisfiedAxes.has(axis),
     );
 
-    // Calculate dynamic weights for each candidate
+    // If there are still unfulfilled specified axes, check if any non-hard-excluded candidate belongs to them
+    const unfulfilledAxisCandidates = unfulfilledSpecifiedAxes.length > 0
+      ? nonHardExcludedCandidates.filter((c) => unfulfilledSpecifiedAxes.includes(c.axis))
+      : [];
+
+    // Prioritize candidates from unfulfilled specified axes to guarantee their extraction
+    const candidatePool = unfulfilledAxisCandidates.length > 0
+      ? unfulfilledAxisCandidates
+      : nonHardExcludedCandidates;
+
+    // Calculate dynamic weights for each candidate in the pool
     const candidateWeights: { candidate: Trait; weight: number }[] = [];
 
-    for (const candidate of nonHardExcludedCandidates) {
+    for (const candidate of candidatePool) {
       let weight = candidate.baseWeight || 10;
 
-      // Axis specification boost
+      // Axis specification boost for multi-axis distribution
       if (
         unfulfilledSpecifiedAxes.length > 0 &&
         unfulfilledSpecifiedAxes.includes(candidate.axis)
       ) {
-        weight += 40; // strongly prioritize specified axes
+        weight += 20;
       }
 
       // Check soft exclusions and co-occurrence with each already selected trait

@@ -117,6 +117,29 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
       {/* Main Extracted Traits Content */}
       {currentResult ? (
         <div className="flex flex-col gap-6">
+          {/* Specified Axes fulfillment status banner (if user specified any axes) */}
+          {currentResult.specifiedAxes && currentResult.specifiedAxes.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 border border-black/30 p-2.5 bg-neutral-50 text-xs">
+              <span className="font-bold">指定軸線狀態：</span>
+              {currentResult.specifiedAxes.map((axisName) => {
+                const isFulfilled = currentResult.traits.some((t) => t.axis === axisName);
+                return (
+                  <span
+                    key={axisName}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 border text-[11px] font-mono font-bold ${
+                      isFulfilled
+                        ? 'border-black bg-black text-white'
+                        : 'border-neutral-400 bg-white text-neutral-500 line-through'
+                    }`}
+                  >
+                    <span>{axisName}</span>
+                    <span>{isFulfilled ? '✓' : '未抽取'}</span>
+                  </span>
+                );
+              })}
+            </div>
+          )}
+
           {/* Traits Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {currentResult.traits.map((item, idx) => (
@@ -180,6 +203,9 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
             >
               <div className="flex items-center gap-2 border-b border-black pb-2">
                 <AlertTriangle size={16} />
+                <span className="text-xs font-black tracking-wider uppercase">
+                  弱相容心理動態解析 ({currentResult.weakCompatibilities.length})
+                </span>
               </div>
 
               <div className="flex flex-col gap-3">

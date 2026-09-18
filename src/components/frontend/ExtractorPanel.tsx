@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, RefreshCw, X, CheckSquare, Square } from 'lucide-react';
+import { BotMessageSquare, RefreshCw, X, CheckSquare, Square } from 'lucide-react';
 import { AxisDefinition, Trait } from '../../types';
 
 interface ExtractorPanelProps {
@@ -109,6 +109,12 @@ export const ExtractorPanel: React.FC<ExtractorPanelProps> = ({
               );
             })}
           </div>
+
+          {selectedAxes.length > 0 && selectedAxes.length > traitCount && (
+            <p className="text-[11px] text-neutral-600 bg-neutral-100 p-2 border border-black/30 leading-snug">
+              提示：目前指定了 {selectedAxes.length} 個軸線標籤，大於抽取總數（{traitCount} 條），系統將從指定的軸線中隨機涵蓋前 {traitCount} 個軸線。
+            </p>
+          )}
         </div>
 
         {/* Pinned Trait Anchor Selector (Optional) */}
@@ -163,10 +169,12 @@ export const ExtractorPanel: React.FC<ExtractorPanelProps> = ({
           {isGenerating ? (
             <>
               <RefreshCw size={18} className="animate-spin" />
+              <span>抽取中...</span>
             </>
           ) : (
             <>
-              <Sparkles size={18} />
+              <BotMessageSquare size={18} />
+              <span>抽取設定</span>
             </>
           )}
         </button>

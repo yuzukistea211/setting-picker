@@ -117,7 +117,7 @@ export const AxisManagementModal: React.FC<AxisManagementModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-      <div className="bg-white border-2 border-black max-w-lg w-full p-5 shadow-2xl flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-150">
+      <div className="bg-white border-2 border-black max-w-lg w-full p-5 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-150">
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b-2 border-black pb-3">
           <div className="flex items-center gap-2">

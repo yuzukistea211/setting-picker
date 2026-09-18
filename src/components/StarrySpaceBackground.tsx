@@ -49,8 +49,6 @@ export const StarrySpaceBackground: React.FC = () => {
     let stars: Star[] = [];
     let constellationEdges: ConstellationEdge[] = [];
     let shootingStars: ShootingStar[] = [];
-    let mouseX = 0;
-    let mouseY = 0;
     let targetParallaxX = 0;
     let targetParallaxY = 0;
     let currentParallaxX = 0;
@@ -197,14 +195,12 @@ export const StarrySpaceBackground: React.FC = () => {
     };
 
     const handleMouseMove = (e: MouseEvent) => {
-      mouseX = e.clientX;
-      mouseY = e.clientY;
-      targetParallaxX = (mouseX - width / 2) * 0.02;
-      targetParallaxY = (mouseY - height / 2) * 0.02;
+      targetParallaxX = (e.clientX - width / 2) * 0.02;
+      targetParallaxY = (e.clientY - height / 2) * 0.02;
     };
 
-    window.addEventListener('resize', setupCanvas);
-    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('resize', setupCanvas, { passive: true });
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
     setupCanvas();
 
     let lastTime = performance.now();

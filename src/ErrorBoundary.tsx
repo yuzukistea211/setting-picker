@@ -42,7 +42,7 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen bg-white text-black p-6 flex flex-col items-center justify-center font-mono">
-          <div className="max-w-md w-full border-2 border-black p-6 shadow-[4px_4px_0px_0px_#000]">
+          <div className="max-w-md w-full border-2 border-black p-6 bg-white">
             <h1 className="text-base font-bold mb-2">應用程式執行中斷</h1>
             <p className="text-xs text-neutral-600 mb-4 leading-relaxed">
               系統在載入或渲染時發生未預期的例外狀況，這通常與快取資料結構不相容有關。

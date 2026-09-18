@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Filter, Eye, ShieldAlert, Sparkles, SlidersHorizontal, Edit3, X } from 'lucide-react';
+import { Filter, SlidersHorizontal, X } from 'lucide-react';
 import { CooccurrenceRule, Dataset, HardExclusionRule, SoftExclusionRule, Trait } from '../../types';
 
 interface MatrixHeatmapProps {
