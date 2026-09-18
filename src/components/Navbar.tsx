@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Download, Upload, RotateCcw, Sliders, Dices } from 'lucide-react';
+import { Download, Upload, RotateCcw, Sliders, Dices, Zap, Sparkles } from 'lucide-react';
 import { Dataset } from '../types';
 
 interface NavbarProps {
@@ -8,6 +8,8 @@ interface NavbarProps {
   dataset: Dataset;
   onImportDataset: (dataset: Dataset) => void;
   onResetDataset: () => void;
+  performanceMode: boolean;
+  onTogglePerformanceMode: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -16,6 +18,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   dataset,
   onImportDataset,
   onResetDataset,
+  performanceMode,
+  onTogglePerformanceMode,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -96,6 +100,36 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Actions */}
         <div className="flex items-center gap-2">
+          {/* Performance Mode / Starry Animation Switch Button */}
+          <button
+            id="btn-toggle-performance-mode"
+            type="button"
+            onClick={onTogglePerformanceMode}
+            title={
+              performanceMode
+                ? '目前為效能模式（靜態星空、低 DPR、無動態循環，大幅節省顯存與電力）。點擊切換為動態星空動畫'
+                : '目前為動態星空動畫。點擊開啟效能模式（關閉動畫循環、限制 DPR、極致省電與低顯存）'
+            }
+            className={`flex items-center gap-1.5 px-3 py-1.5 border text-xs font-bold transition-colors cursor-pointer ${
+              performanceMode
+                ? 'border-black bg-neutral-900 text-white hover:bg-black'
+                : 'border-black bg-white text-black hover:bg-neutral-100'
+            }`}
+          >
+            {performanceMode ? (
+              <>
+                <Zap size={14} className="text-amber-400 fill-amber-400" />
+                <span>效能模式: 開</span>
+                <span className="text-[10px] font-mono opacity-80">(靜態省顯存)</span>
+              </>
+            ) : (
+              <>
+                <Sparkles size={14} />
+                <span>星空動畫: 開</span>
+              </>
+            )}
+          </button>
+
           <input
             ref={fileInputRef}
             type="file"
