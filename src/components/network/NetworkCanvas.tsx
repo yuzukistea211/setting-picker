@@ -166,7 +166,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     <div
       ref={containerRef}
       id="relationship-network-canvas-container"
-      className="relative w-full h-[360px] lg:h-[460px] border-2 border-black bg-white overflow-hidden select-none"
+      className="relative w-full h-[360px] lg:h-[460px] border-2 border-black bg-(--main-color) overflow-hidden select-none"
     >
       {/* Canvas Controls Toolbar */}
       <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 bg-white border border-black p-1 shadow-none">

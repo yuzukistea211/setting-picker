@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Download, Upload, RotateCcw, Sliders, Dices, Network } from 'lucide-react';
+import { Download, Upload, RotateCcw, Sliders, Dices, Network, Rat } from 'lucide-react';
 import { Dataset } from '../types';
 
 interface NavbarProps {
@@ -56,11 +56,11 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Title */}
         <div className="flex items-center gap-3">
           <div className="border-2 border-black bg-black text-white px-2.5 py-1 text-sm font-black tracking-wider">
-            OC
+            <Rat size={16} />
           </div>
           <div>
             <h1 className="text-lg font-black tracking-tight leading-none">OC設定抽取器</h1>
-            <span className="text-xs font-mono tracking-widest text-black">MODERN PSYCHOLOGY ENGINE</span>
+            <span className="text-xs font-mono tracking-widest text-black">Made by yuzukistea211</span>
           </div>
         </div>
 

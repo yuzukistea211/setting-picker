@@ -503,7 +503,7 @@ export const RelationshipNetworkPage: React.FC = () => {
             /* Selected Character Card */
             <div
               id="inspector-character-details"
-              className="border-2 border-black bg-white p-3.5 flex flex-col gap-3"
+              className="border-2 border-black bg-(--main-color) p-3.5 flex flex-col gap-3"
             >
               <div className="flex items-center justify-between border-b-2 border-black pb-2">
                 <span className="font-mono text-xs px-2 py-0.5 border border-black bg-black text-white font-bold">
