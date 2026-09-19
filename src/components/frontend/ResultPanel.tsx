@@ -151,7 +151,7 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
       case '輕微':
         return 'bg-white text-black border border-neutral-400';
       case '隱藏':
-        return 'bg-white text-neutral-600 border border-dashed border-black';
+        return 'bg-white text-neutral-600 border border-neutral-400/50';
       default:
         return 'border border-black';
     }
