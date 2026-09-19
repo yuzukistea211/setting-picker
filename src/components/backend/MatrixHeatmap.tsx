@@ -126,7 +126,7 @@ export const MatrixHeatmap: React.FC<MatrixHeatmapProps> = ({
   return (
     <div className="flex flex-col gap-5">
       {/* Top Filter & Legend */}
-      <div className="flex flex-wrap items-center justify-between border-2 border-black p-3 gap-3 bg-white">
+      <div className="flex flex-wrap items-center justify-between border-2 border-black p-3 gap-3 bg-(--main-color)">
         <div className="flex items-center gap-2">
           <Filter size={16} />
           <span className="text-xs font-bold uppercase tracking-wider">軸線過濾</span>
