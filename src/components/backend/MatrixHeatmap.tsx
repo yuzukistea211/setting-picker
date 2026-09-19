@@ -11,6 +11,184 @@ interface MatrixHeatmapProps {
   onDeleteRule: (type: 'cooccurrence' | 'soft' | 'hard', id: string) => void;
 }
 
+// Isolated Cell Editor Drawer: Prevents typing and slider changes from re-rendering the 1,200+ table cells
+interface CellEditorDrawerProps {
+  traitA: Trait;
+  traitB: Trait;
+  initialHard: HardExclusionRule | undefined;
+  initialSoft: SoftExclusionRule | undefined;
+  initialCooc: CooccurrenceRule | undefined;
+  onClose: () => void;
+  onSave: (params: {
+    isHard: boolean;
+    hardReason: string;
+    isSoft: boolean;
+    softPenalty: number;
+    softNote: string;
+    coocWeight: number;
+  }) => void;
+}
+
+const CellEditorDrawer: React.FC<CellEditorDrawerProps> = React.memo(({
+  traitA,
+  traitB,
+  initialHard,
+  initialSoft,
+  initialCooc,
+  onClose,
+  onSave,
+}) => {
+  const [isHard, setIsHard] = useState<boolean>(!!initialHard);
+  const [hardReason, setHardReason] = useState<string>(initialHard?.reason || '');
+  const [isSoft, setIsSoft] = useState<boolean>(!!initialSoft);
+  const [softPenalty, setSoftPenalty] = useState<number>(initialSoft?.penaltyMultiplier ?? 0.2);
+  const [softNote, setSoftNote] = useState<string>(initialSoft?.note || '');
+  const [editCoocWeight, setEditCoocWeight] = useState<number>(initialCooc?.weight ?? 0);
+
+  const handleSave = () => {
+    onSave({
+      isHard,
+      hardReason,
+      isSoft,
+      softPenalty,
+      softNote,
+      coocWeight: editCoocWeight,
+    });
+  };
+
+  return (
+    <div
+      id="dialog-matrix-editor"
+      className="border-2 border-black p-4 bg-white flex flex-col gap-4"
+    >
+      <div className="flex items-center justify-between border-b-2 border-black pb-2">
+        <div className="flex items-center gap-2">
+          <SlidersHorizontal size={16} />
+          <span className="text-sm font-black tracking-wider uppercase">
+            詞條關係編輯：【{traitA.name}】 × 【{traitB.name}】
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="border border-black p-1 hover:bg-black hover:text-white cursor-pointer"
+        >
+          <X size={14} />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Hard Exclusion Configuration */}
+        <div className="border border-black p-3 flex flex-col gap-2.5">
+          <label className="flex items-center gap-2 font-black text-xs cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isHard}
+              onChange={(e) => setIsHard(e.target.checked)}
+              className="accent-black w-4 h-4"
+            />
+            <span>硬排除 (布林強制阻斷)</span>
+          </label>
+          {isHard && (
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] font-bold">排除原因</span>
+              <input
+                type="text"
+                value={hardReason}
+                onChange={(e) => setHardReason(e.target.value)}
+                placeholder="輸入邏輯矛盾理由"
+                className="border border-black p-1.5 text-xs focus:outline-none"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Soft Exclusion Configuration */}
+        <div className="border border-black p-3 flex flex-col gap-2.5">
+          <label className="flex items-center gap-2 font-black text-xs cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isSoft}
+              onChange={(e) => setIsSoft(e.target.checked)}
+              className="accent-black w-4 h-4"
+            />
+            <span>軟排除 (懲罰係數與弱相容)</span>
+          </label>
+          {isSoft && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold">懲罰乘數 (0.01 ~ 0.5)</span>
+                <span className="font-mono text-xs">{softPenalty}</span>
+              </div>
+              <input
+                type="range"
+                min="0.05"
+                max="0.5"
+                step="0.05"
+                value={softPenalty}
+                onChange={(e) => setSoftPenalty(parseFloat(e.target.value))}
+                className="accent-black w-full"
+              />
+              <span className="text-[10px] text-neutral-500">
+                越小懲罰越重（0.05 代表概率降低至 5%）
+              </span>
+              <input
+                type="text"
+                value={softNote}
+                onChange={(e) => setSoftNote(e.target.value)}
+                placeholder="心理學弱相容備註（如：非完全排斥但罕見）"
+                className="border border-black p-1.5 text-xs focus:outline-none"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Co-occurrence Weight Configuration */}
+        <div className="border border-black p-3 flex flex-col gap-2.5">
+          <div className="flex items-center justify-between">
+            <span className="font-black text-xs">共生權重 (-10 ~ +10)</span>
+            <span className="font-mono font-bold text-xs">
+              {editCoocWeight > 0 ? `+${editCoocWeight}` : editCoocWeight}
+            </span>
+          </div>
+          <input
+            type="range"
+            min="-10"
+            max="10"
+            step="1"
+            value={editCoocWeight}
+            onChange={(e) => setEditCoocWeight(parseInt(e.target.value, 10))}
+            className="accent-black w-full"
+          />
+          <div className="flex justify-between text-[10px] text-neutral-500">
+            <span>強負共生 (-10)</span>
+            <span>中立 (0)</span>
+            <span>強正共生 (+10)</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 border-t border-black pt-3">
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-4 py-1.5 border border-black text-xs font-bold hover:bg-neutral-100 cursor-pointer"
+        >
+          取消
+        </button>
+        <button
+          id="btn-save-matrix-cell"
+          type="button"
+          onClick={handleSave}
+          className="px-5 py-1.5 border-2 border-black bg-black text-white text-xs font-bold hover:bg-neutral-800 cursor-pointer"
+        >
+          儲存規則設定
+        </button>
+      </div>
+    </div>
+  );
+});
+
 export const MatrixHeatmap: React.FC<MatrixHeatmapProps> = ({
   dataset,
   onUpdateCooccurrence,
@@ -34,30 +212,9 @@ export const MatrixHeatmap: React.FC<MatrixHeatmapProps> = ({
     return dataset.traits.filter((t) => t.axis === selectedAxis);
   }, [dataset.traits, selectedAxis]);
 
-  // Edit state for active cell
-  const [editCoocWeight, setEditCoocWeight] = useState<number>(0);
-  const [isHard, setIsHard] = useState<boolean>(false);
-  const [hardReason, setHardReason] = useState<string>('');
-  const [isSoft, setIsSoft] = useState<boolean>(false);
-  const [softPenalty, setSoftPenalty] = useState<number>(0.2);
-  const [softNote, setSoftNote] = useState<string>('');
-
   const handleOpenCell = useCallback((traitA: Trait, traitB: Trait) => {
     setActiveCell({ traitA, traitB });
-    const key = `${traitA.id}:${traitB.id}`;
-    const hard = matrixData.hardMap.get(key);
-    const soft = matrixData.softMap.get(key);
-    const cooc = matrixData.coocMap.get(key);
-
-    setIsHard(!!hard);
-    setHardReason(hard?.reason || '');
-
-    setIsSoft(!!soft);
-    setSoftPenalty(soft?.penaltyMultiplier ?? 0.2);
-    setSoftNote(soft?.note || '');
-
-    setEditCoocWeight(cooc?.weight ?? 0);
-  }, [matrixData]);
+  }, []);
 
   // Event delegation handler: removes thousands of closure allocations per render
   const handleTbodyClick = useCallback((e: React.MouseEvent<HTMLTableSectionElement>) => {
@@ -74,7 +231,21 @@ export const MatrixHeatmap: React.FC<MatrixHeatmapProps> = ({
     }
   }, [matrixData, handleOpenCell]);
 
-  const handleSaveCell = () => {
+  const handleSaveCell = useCallback(({
+    isHard,
+    hardReason,
+    isSoft,
+    softPenalty,
+    softNote,
+    coocWeight,
+  }: {
+    isHard: boolean;
+    hardReason: string;
+    isSoft: boolean;
+    softPenalty: number;
+    softNote: string;
+    coocWeight: number;
+  }) => {
     if (!activeCell) return;
     const { traitA, traitB } = activeCell;
     const key = `${traitA.id}:${traitB.id}`;
@@ -108,12 +279,12 @@ export const MatrixHeatmap: React.FC<MatrixHeatmapProps> = ({
 
     // Co-occurrence
     const existingCooc = matrixData.coocMap.get(key);
-    if (editCoocWeight !== 0) {
+    if (coocWeight !== 0) {
       onUpdateCooccurrence({
         id: existingCooc?.id || `co-${Date.now()}`,
         traitAId: traitA.id,
         traitBId: traitB.id,
-        weight: Number(editCoocWeight),
+        weight: Number(coocWeight),
         intensityModifiers: existingCooc?.intensityModifiers || {},
       });
     } else if (existingCooc) {
@@ -121,7 +292,18 @@ export const MatrixHeatmap: React.FC<MatrixHeatmapProps> = ({
     }
 
     setActiveCell(null);
-  };
+  }, [activeCell, matrixData, onUpdateHardExclusion, onDeleteRule, onUpdateSoftExclusion, onUpdateCooccurrence]);
+
+  const activeKey = activeCell ? `${activeCell.traitA.id}:${activeCell.traitB.id}` : null;
+  const initialHard = activeKey ? matrixData.hardMap.get(activeKey) : undefined;
+  const initialSoft = activeKey ? matrixData.softMap.get(activeKey) : undefined;
+  const initialCooc = activeKey ? matrixData.coocMap.get(activeKey) : undefined;
+
+  const numTraits = matrixData.numTraits;
+  const hardMatrix = matrixData.hardMatrix;
+  const softMultiplierMatrix = matrixData.softMultiplierMatrix;
+  const coocWeightMatrix = matrixData.coocWeightMatrix;
+  const traitIndexMap = matrixData.traitIndexMap;
 
   return (
     <div className="flex flex-col gap-5">
@@ -213,13 +395,7 @@ export const MatrixHeatmap: React.FC<MatrixHeatmapProps> = ({
 
                 {/* Cells */}
                 {filteredTraits.map((colTrait) => {
-                  const isSelf = rowTrait.id === colTrait.id;
-                  const key = `${rowTrait.id}:${colTrait.id}`;
-                  const hard = matrixData.hardMap.get(key);
-                  const soft = matrixData.softMap.get(key);
-                  const cooc = matrixData.coocMap.get(key);
-
-                  if (isSelf) {
+                  if (rowTrait.id === colTrait.id) {
                     return (
                       <td
                         key={colTrait.id}
@@ -230,22 +406,31 @@ export const MatrixHeatmap: React.FC<MatrixHeatmapProps> = ({
                     );
                   }
 
+                  const rowIdx = traitIndexMap.get(rowTrait.id);
+                  const colIdx = traitIndexMap.get(colTrait.id);
+                  let isHardCell = false;
+                  let softMultiplier = 1.0;
+                  let coocWeight = 0;
+
+                  if (rowIdx !== undefined && colIdx !== undefined) {
+                    const offset = rowIdx * numTraits + colIdx;
+                    isHardCell = hardMatrix[offset] === 1;
+                    softMultiplier = softMultiplierMatrix[offset];
+                    coocWeight = coocWeightMatrix[offset];
+                  }
+
                   let cellContent = '';
                   let cellClass = 'border-b border-r border-black p-1 text-center cursor-pointer ';
 
-                  if (hard) {
+                  if (isHardCell) {
                     cellContent = '✕';
                     cellClass += 'bg-black text-white font-bold';
-                  } else if (soft) {
-                    cellContent = `${soft.penaltyMultiplier}`;
+                  } else if (softMultiplier < 1.0) {
+                    cellContent = `${softMultiplier}`;
                     cellClass += 'border-dashed font-bold hover:bg-neutral-100';
-                  } else if (cooc) {
-                    cellContent = (cooc.weight > 0 ? `+${cooc.weight}` : `${cooc.weight}`);
-                    if (cooc.weight > 0) {
-                      cellClass += 'font-black hover:bg-neutral-100';
-                    } else {
-                      cellClass += 'font-bold hover:bg-neutral-100';
-                    }
+                  } else if (coocWeight !== 0) {
+                    cellContent = coocWeight > 0 ? `+${coocWeight}` : `${coocWeight}`;
+                    cellClass += coocWeight > 0 ? 'font-black hover:bg-neutral-100' : 'font-bold hover:bg-neutral-100';
                   } else {
                     cellClass += 'hover:bg-neutral-100 text-neutral-300';
                   }
@@ -270,130 +455,15 @@ export const MatrixHeatmap: React.FC<MatrixHeatmapProps> = ({
 
       {/* Interactive Cell Inspector / Editor Drawer */}
       {activeCell && (
-        <div
-          id="dialog-matrix-editor"
-          className="border-2 border-black p-4 bg-white flex flex-col gap-4"
-        >
-          <div className="flex items-center justify-between border-b-2 border-black pb-2">
-            <div className="flex items-center gap-2">
-              <SlidersHorizontal size={16} />
-              <span className="text-sm font-black tracking-wider uppercase">
-                詞條關係編輯：【{activeCell.traitA.name}】 × 【{activeCell.traitB.name}】
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setActiveCell(null)}
-              className="border border-black p-1 hover:bg-black hover:text-white cursor-pointer"
-            >
-              <X size={14} />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Hard Exclusion Configuration */}
-            <div className="border border-black p-3 flex flex-col gap-2.5">
-              <label className="flex items-center gap-2 font-black text-xs cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isHard}
-                  onChange={(e) => setIsHard(e.target.checked)}
-                  className="accent-black w-4 h-4"
-                />
-                <span>硬排除 (布林強制阻斷)</span>
-              </label>
-              {isHard && (
-                <div className="flex flex-col gap-1">
-                  <span className="text-[11px] font-bold">排除原因</span>
-                  <input
-                    type="text"
-                    value={hardReason}
-                    onChange={(e) => setHardReason(e.target.value)}
-                    placeholder="輸入邏輯矛盾理由"
-                    className="border border-black p-1.5 text-xs focus:outline-none"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Soft Exclusion Configuration */}
-            <div className="border border-black p-3 flex flex-col gap-2.5">
-              <label className="flex items-center gap-2 font-black text-xs cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isSoft}
-                  onChange={(e) => setIsSoft(e.target.checked)}
-                  className="accent-black w-4 h-4"
-                />
-                <span>軟排除 (懲罰係數與弱相容)</span>
-              </label>
-              {isSoft && (
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold">懲罰乘數 (0.01 ~ 0.5)</span>
-                    <span className="font-mono text-xs">{softPenalty}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.05"
-                    max="0.5"
-                    step="0.05"
-                    value={softPenalty}
-                    onChange={(e) => setSoftPenalty(parseFloat(e.target.value))}
-                    className="accent-black cursor-pointer"
-                  />
-                  <span className="text-[11px] font-bold">弱相容獨立註解</span>
-                  <textarea
-                    rows={2}
-                    value={softNote}
-                    onChange={(e) => setSoftNote(e.target.value)}
-                    placeholder="輸入該矛盾組合的合理化動態描述"
-                    className="border border-black p-1.5 text-xs focus:outline-none resize-none"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Co-occurrence Weight Configuration */}
-            <div className="border border-black p-3 flex flex-col gap-2.5">
-              <div className="flex items-center justify-between font-black text-xs">
-                <span>共現權重 (-10 ~ +10)</span>
-                <span className="font-mono">{editCoocWeight > 0 ? `+${editCoocWeight}` : editCoocWeight}</span>
-              </div>
-              <input
-                type="range"
-                min="-10"
-                max="10"
-                step="1"
-                value={editCoocWeight}
-                onChange={(e) => setEditCoocWeight(parseInt(e.target.value, 10))}
-                className="accent-black cursor-pointer"
-              />
-              <div className="flex items-center justify-between text-[10px] font-mono">
-                <span>-10 (極度排斥)</span>
-                <span>0 (無關)</span>
-                <span>+10 (強烈綁定)</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2 border-t border-black pt-2">
-            <button
-              type="button"
-              onClick={() => setActiveCell(null)}
-              className="px-3 py-1.5 border border-black text-xs font-bold hover:bg-neutral-100 cursor-pointer"
-            >
-              取消
-            </button>
-            <button
-              type="button"
-              onClick={handleSaveCell}
-              className="px-4 py-1.5 border-2 border-black bg-black text-white text-xs font-black hover:bg-white hover:text-black cursor-pointer transition-colors"
-            >
-              儲存變更
-            </button>
-          </div>
-        </div>
+        <CellEditorDrawer
+          traitA={activeCell.traitA}
+          traitB={activeCell.traitB}
+          initialHard={initialHard}
+          initialSoft={initialSoft}
+          initialCooc={initialCooc}
+          onClose={() => setActiveCell(null)}
+          onSave={handleSaveCell}
+        />
       )}
     </div>
   );

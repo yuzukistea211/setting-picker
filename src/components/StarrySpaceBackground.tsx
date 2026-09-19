@@ -23,6 +23,7 @@ interface ConstellationEdge {
 }
 
 interface ShootingStar {
+  active: boolean;
   x: number;
   y: number;
   length: number;
@@ -60,7 +61,18 @@ export const StarrySpaceBackground: React.FC = () => {
     let height = 0;
     let stars: Star[] = [];
     let constellationEdges: ConstellationEdge[] = [];
-    let shootingStars: ShootingStar[] = [];
+    const MAX_SHOOTING_STARS = 3;
+    const shootingStars: ShootingStar[] = Array.from({ length: MAX_SHOOTING_STARS }, () => ({
+      active: false,
+      x: 0,
+      y: 0,
+      length: 0,
+      speed: 0,
+      angle: 0,
+      alpha: 0,
+      life: 0,
+      maxLife: 0,
+    }));
     let targetParallaxX = 0;
     let targetParallaxY = 0;
     let currentParallaxX = 0;
@@ -161,20 +173,20 @@ export const StarrySpaceBackground: React.FC = () => {
     };
 
     const draw4PointSparkle = (cx: number, cy: number, radius: number, rot: number, alpha: number) => {
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(rot);
       ctx.fillStyle = getCachedAlphaColor(alpha);
-
       ctx.beginPath();
-      const points = 4;
+      const cosR = Math.cos(rot);
+      const sinR = Math.sin(rot);
       const innerRadius = radius * 0.22;
 
-      for (let i = 0; i < points * 2; i++) {
+      for (let i = 0; i < 8; i++) {
         const r = i % 2 === 0 ? radius : innerRadius;
-        const angle = (i * Math.PI) / points;
-        const px = Math.cos(angle) * r;
-        const py = Math.sin(angle) * r;
+        const angle = (i * Math.PI) / 4;
+        const rawX = Math.cos(angle) * r;
+        const rawY = Math.sin(angle) * r;
+        // Direct trigonometric rotation around (cx, cy) eliminates ctx.save()/ctx.restore() state allocations
+        const px = cx + rawX * cosR - rawY * sinR;
+        const py = cy + rawX * sinR + rawY * cosR;
         if (i === 0) ctx.moveTo(px, py);
         else ctx.lineTo(px, py);
       }
@@ -184,13 +196,14 @@ export const StarrySpaceBackground: React.FC = () => {
       // Tiny core center dot
       ctx.fillStyle = getCachedAlphaColor(alpha + 0.2);
       ctx.beginPath();
-      ctx.arc(0, 0, 1, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 1, 0, Math.PI * 2);
       ctx.fill();
-
-      ctx.restore();
     };
 
     const spawnShootingStar = () => {
+      const slot = shootingStars.find((s) => !s.active);
+      if (!slot) return;
+
       const startX = Math.random() * width * 0.8 + width * 0.1;
       const startY = Math.random() * height * 0.4;
       const angle = (Math.random() * 25 + 25) * (Math.PI / 180);
@@ -198,16 +211,15 @@ export const StarrySpaceBackground: React.FC = () => {
       const speed = Math.random() * 7 + 8;
       const maxLife = Math.random() * 35 + 30;
 
-      shootingStars.push({
-        x: startX,
-        y: startY,
-        length,
-        speed,
-        angle,
-        alpha: 0.8,
-        life: 0,
-        maxLife,
-      });
+      slot.active = true;
+      slot.x = startX;
+      slot.y = startY;
+      slot.length = length;
+      slot.speed = speed;
+      slot.angle = angle;
+      slot.alpha = 0.8;
+      slot.life = 0;
+      slot.maxLife = maxLife;
 
       nextShootingStarTime = Date.now() + Math.random() * 8000 + 5000;
     };
@@ -249,7 +261,6 @@ export const StarrySpaceBackground: React.FC = () => {
       ctx.fillRect(0, 0, width, height);
 
       // Faint astronomical celestial coordinate / orbit rings
-      ctx.save();
       ctx.strokeStyle = 'rgba(0, 0, 0, 0.04)';
       ctx.lineWidth = 0.8;
       ctx.setLineDash([4, 8]);
@@ -264,7 +275,7 @@ export const StarrySpaceBackground: React.FC = () => {
       ctx.beginPath();
       ctx.ellipse(width * 0.5, height * 0.9, 320, 110, -0.2, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.restore();
+      ctx.setLineDash([]);
 
       // Draw Constellation Lines between connected stars
       if (constellationEdges.length > 0) {
@@ -332,40 +343,40 @@ export const StarrySpaceBackground: React.FC = () => {
         spawnShootingStar();
       }
 
-      // Update and Draw Shooting Stars
-      if (shootingStars.length > 0) {
-        ctx.lineWidth = 1.2;
-        ctx.setLineDash([]);
+      // Update and Draw Shooting Stars from pre-allocated pool
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([]);
 
-        for (let i = shootingStars.length - 1; i >= 0; i--) {
-          const m = shootingStars[i];
-          m.life += delta;
-          const progress = m.life / m.maxLife;
+      for (let i = 0; i < shootingStars.length; i++) {
+        const m = shootingStars[i];
+        if (!m.active) continue;
 
-          if (progress >= 1) {
-            shootingStars.splice(i, 1);
-            continue;
-          }
+        m.life += delta;
+        const progress = m.life / m.maxLife;
 
-          m.x += Math.cos(m.angle) * m.speed * delta;
-          m.y += Math.sin(m.angle) * m.speed * delta;
-
-          const currentAlpha =
-            progress < 0.2
-              ? (progress / 0.2) * m.alpha
-              : (1 - (progress - 0.2) / 0.8) * m.alpha;
-
-          const tailX = m.x - Math.cos(m.angle) * m.length * (1 - progress * 0.4);
-          const tailY = m.y - Math.sin(m.angle) * m.length * (1 - progress * 0.4);
-
-          ctx.strokeStyle = getCachedAlphaColor(currentAlpha * 0.7);
-          ctx.beginPath();
-          ctx.moveTo(tailX, tailY);
-          ctx.lineTo(m.x, m.y);
-          ctx.stroke();
-
-          draw4PointSparkle(m.x, m.y, 2.5, m.angle, currentAlpha);
+        if (progress >= 1) {
+          m.active = false;
+          continue;
         }
+
+        m.x += Math.cos(m.angle) * m.speed * delta;
+        m.y += Math.sin(m.angle) * m.speed * delta;
+
+        const currentAlpha =
+          progress < 0.2
+            ? (progress / 0.2) * m.alpha
+            : (1 - (progress - 0.2) / 0.8) * m.alpha;
+
+        const tailX = m.x - Math.cos(m.angle) * m.length * (1 - progress * 0.4);
+        const tailY = m.y - Math.sin(m.angle) * m.length * (1 - progress * 0.4);
+
+        ctx.strokeStyle = getCachedAlphaColor(currentAlpha * 0.7);
+        ctx.beginPath();
+        ctx.moveTo(tailX, tailY);
+        ctx.lineTo(m.x, m.y);
+        ctx.stroke();
+
+        draw4PointSparkle(m.x, m.y, 2.5, m.angle, currentAlpha);
       }
     };
 
@@ -397,6 +408,11 @@ export const StarrySpaceBackground: React.FC = () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      // Immediately release backing canvas bitmap memory from GPU and RAM
+      if (canvas) {
+        canvas.width = 0;
+        canvas.height = 0;
+      }
     };
   }, []);
 
