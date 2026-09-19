@@ -119,14 +119,14 @@ export const SimulationAuditView: React.FC<SimulationAuditViewProps> = ({ datase
       {/* D3 Visualizations */}
       {simResult && (
         <div className="flex flex-col gap-5">
-          {/* D3 Chart 1: Trait Frequency Bar Chart */}
+          {/* D3 Chart 1: Intensity Distribution vs. Expected Normal Curve */}
+          <IntensityDistributionD3Chart simResult={simResult} />
+
+          {/* D3 Chart 2: Trait Frequency Bar Chart */}
           <TraitFrequencyD3Chart
             stats={filteredStats || simResult.traitStats}
             totalRuns={simResult.totalRuns}
           />
-
-          {/* D3 Chart 2: Intensity Distribution vs. Expected Normal Curve */}
-          <IntensityDistributionD3Chart simResult={simResult} />
         </div>
       )}
 

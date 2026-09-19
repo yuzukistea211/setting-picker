@@ -7,7 +7,7 @@ import { Navbar } from './components/Navbar';
 import { ExtractorPanel } from './components/frontend/ExtractorPanel';
 import { ResultPanel } from './components/frontend/ResultPanel';
 import { BackendDashboard } from './components/backend/BackendDashboard';
-import { RelationshipNetworkView } from './components/network/RelationshipNetworkView';
+import { RelationshipNetworkPage } from './components/network/RelationshipNetworkPage';
 import { StarrySpaceBackground } from './components/StarrySpaceBackground';
 
 export default function App() {
@@ -240,12 +240,12 @@ export default function App() {
               onAddTrait={handleAddTrait}
             />
           </div>
-        ) : currentTab === 'backend' ? (
+        ) : currentTab === 'network' ? (
+          /* Network: Character Relationship Network */
+          <RelationshipNetworkPage />
+        ) : (
           /* Backend: Comprehensive Dashboard */
           <BackendDashboard dataset={dataset} onSaveDataset={handleSaveDataset} />
-        ) : (
-          /* Network: Character Relationship Network */
-          <RelationshipNetworkView />
         )}
       </main>
     </div>

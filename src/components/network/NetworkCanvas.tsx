@@ -1,263 +1,495 @@
-import React, { useRef, useState, useEffect, useMemo } from 'react';
-import { NetworkCharacter, CharacterRelationship } from '../../types';
-import { ZoomIn, ZoomOut, RotateCcw, User, ArrowRightLeft } from 'lucide-react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { ZoomIn, ZoomOut, Maximize2, RefreshCw } from 'lucide-react';
+import {
+  CharacterRelationship,
+  NetworkCharacter,
+} from '../../types';
 
 interface NetworkCanvasProps {
   characters: NetworkCharacter[];
   relationships: CharacterRelationship[];
   selectedCharacterId: string | null;
-  onSelectCharacter: (id: string | null) => void;
-  onSelectRelationship: (rel: CharacterRelationship) => void;
+  selectedRelationshipId: string | null;
+  onSelectCharacter: (charId: string | null) => void;
+  onSelectRelationship: (relId: string | null) => void;
+  onUpdateCharacterPosition: (charId: string, x: number, y: number) => void;
+  onRearrangeLayout: () => void;
 }
 
 export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
   characters,
   relationships,
   selectedCharacterId,
+  selectedRelationshipId,
   onSelectCharacter,
   onSelectRelationship,
+  onUpdateCharacterPosition,
+  onRearrangeLayout,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 600, height: 400 });
-  const [zoom, setZoom] = useState(1);
-  const [hoveredRelId, setHoveredRelId] = useState<string | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
 
-  // ResizeObserver for responsive width & height
+  // Zoom & Pan state
+  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef({ x: 0, y: 0, tx: 0, ty: 0 });
+
+  // Node Dragging state
+  const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
+  const dragStartRef = useRef({ startX: 0, startY: 0, nodeStartX: 0, nodeStartY: 0 });
+
+  // Hover state
+  const [hoveredRelId, setHoveredRelId] = useState<string | null>(null);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+
+  // Center initial view if nodes exist
   useEffect(() => {
-    if (!containerRef.current) return;
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry) {
-        setDimensions({
-          width: Math.max(300, entry.contentRect.width),
-          height: Math.max(350, entry.contentRect.height),
+    if (containerRef.current && characters.length > 0) {
+      const rect = containerRef.current.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        // compute bounding box of characters
+        let minX = Infinity;
+        let maxX = -Infinity;
+        let minY = Infinity;
+        let maxY = -Infinity;
+
+        characters.forEach((c) => {
+          const cx = c.x ?? 300;
+          const cy = c.y ?? 300;
+          if (cx < minX) minX = cx;
+          if (cx > maxX) maxX = cx;
+          if (cy < minY) minY = cy;
+          if (cy > maxY) maxY = cy;
         });
+
+        if (minX !== Infinity) {
+          const centerX = (minX + maxX) / 2;
+          const centerY = (minY + maxY) / 2;
+          setTransform({
+            x: rect.width / 2 - centerX,
+            y: rect.height / 2 - centerY,
+            scale: 1,
+          });
+        }
       }
-    });
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
+    }
   }, []);
 
-  // Compute node positions in circular layout around center
-  const nodePositions = useMemo(() => {
-    const map = new Map<string, { x: number; y: number }>();
-    const count = characters.length;
-    if (count === 0) return map;
+  // Pan handlers on SVG background
+  const handleMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+    // Only pan if clicked directly on svg background
+    if ((e.target as HTMLElement).tagName === 'svg' || (e.target as HTMLElement).id === 'canvas-bg') {
+      setIsPanning(true);
+      panStartRef.current = {
+        x: e.clientX,
+        y: e.clientY,
+        tx: transform.x,
+        ty: transform.y,
+      };
+      onSelectCharacter(null);
+      onSelectRelationship(null);
+    }
+  };
 
-    const centerX = dimensions.width / 2;
-    const centerY = dimensions.height / 2;
-    const radius = Math.min(centerX, centerY) * 0.72;
-
-    characters.forEach((char, index) => {
-      if (count === 1) {
-        map.set(char.id, { x: centerX, y: centerY });
-      } else {
-        const angle = (2 * Math.PI * index) / count - Math.PI / 2;
-        map.set(char.id, {
-          x: centerX + radius * Math.cos(angle),
-          y: centerY + radius * Math.sin(angle),
-        });
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent<SVGSVGElement>) => {
+      if (isPanning) {
+        const dx = e.clientX - panStartRef.current.x;
+        const dy = e.clientY - panStartRef.current.y;
+        setTransform((prev) => ({
+          ...prev,
+          x: panStartRef.current.tx + dx,
+          y: panStartRef.current.ty + dy,
+        }));
+      } else if (draggingNodeId) {
+        const dx = (e.clientX - dragStartRef.current.startX) / transform.scale;
+        const dy = (e.clientY - dragStartRef.current.startY) / transform.scale;
+        const newX = Math.round(dragStartRef.current.nodeStartX + dx);
+        const newY = Math.round(dragStartRef.current.nodeStartY + dy);
+        onUpdateCharacterPosition(draggingNodeId, newX, newY);
       }
-    });
+    },
+    [isPanning, draggingNodeId, transform.scale, onUpdateCharacterPosition],
+  );
 
+  const handleMouseUp = () => {
+    setIsPanning(false);
+    setDraggingNodeId(null);
+  };
+
+  // Wheel zoom
+  const handleWheel = (e: React.WheelEvent<SVGSVGElement>) => {
+    e.preventDefault();
+    if (!svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+    const nextScale = Math.max(0.3, Math.min(2.5, transform.scale * zoomFactor));
+
+    // Zoom centered around mouse pointer
+    const newX = mouseX - (mouseX - transform.x) * (nextScale / transform.scale);
+    const newY = mouseY - (mouseY - transform.y) * (nextScale / transform.scale);
+
+    setTransform({
+      x: newX,
+      y: newY,
+      scale: nextScale,
+    });
+  };
+
+  // Node Drag start
+  const handleNodeMouseDown = (e: React.MouseEvent, char: NetworkCharacter) => {
+    e.stopPropagation();
+    setDraggingNodeId(char.id);
+    onSelectCharacter(char.id);
+    dragStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      nodeStartX: char.x ?? 300,
+      nodeStartY: char.y ?? 300,
+    };
+  };
+
+  // Node Map for fast coordinate lookup
+  const charMap = useMemo(() => {
+    const map = new Map<string, NetworkCharacter>();
+    characters.forEach((c) => map.set(c.id, c));
     return map;
-  }, [characters, dimensions]);
+  }, [characters]);
+
+  // Node radius
+  const NODE_RADIUS = 32;
 
   return (
     <div
       ref={containerRef}
-      id="container-network-canvas"
-      className="relative w-full h-[420px] border-2 border-black bg-neutral-50 overflow-hidden select-none"
+      id="relationship-network-canvas-container"
+      className="relative w-full h-[620px] lg:h-[720px] border-2 border-black bg-white overflow-hidden select-none"
     >
-      {/* Zoom / Reset Controls */}
-      <div className="absolute top-3 right-3 z-20 flex items-center gap-1 bg-white border border-black p-1 shadow-xs">
+      {/* Canvas Controls Toolbar */}
+      <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 bg-white border border-black p-1 shadow-none">
         <button
+          id="btn-zoom-in"
           type="button"
-          onClick={() => setZoom((z) => Math.min(2, z + 0.15))}
-          className="p-1 hover:bg-black hover:text-white transition-colors cursor-pointer"
-          title="放大"
+          onClick={() =>
+            setTransform((prev) => ({
+              ...prev,
+              scale: Math.min(2.5, prev.scale * 1.2),
+            }))
+          }
+          className="p-1.5 border border-black hover:bg-black hover:text-white cursor-pointer"
         >
           <ZoomIn size={14} />
         </button>
         <button
+          id="btn-zoom-out"
           type="button"
-          onClick={() => setZoom((z) => Math.max(0.5, z - 0.15))}
-          className="p-1 hover:bg-black hover:text-white transition-colors cursor-pointer"
-          title="縮小"
+          onClick={() =>
+            setTransform((prev) => ({
+              ...prev,
+              scale: Math.max(0.3, prev.scale * 0.8),
+            }))
+          }
+          className="p-1.5 border border-black hover:bg-black hover:text-white cursor-pointer"
         >
           <ZoomOut size={14} />
         </button>
         <button
+          id="btn-reset-view"
           type="button"
           onClick={() => {
-            setZoom(1);
-            onSelectCharacter(null);
+            if (containerRef.current && characters.length > 0) {
+              const rect = containerRef.current.getBoundingClientRect();
+              let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+              characters.forEach((c) => {
+                const cx = c.x ?? 300;
+                const cy = c.y ?? 300;
+                if (cx < minX) minX = cx;
+                if (cx > maxX) maxX = cx;
+                if (cy < minY) minY = cy;
+                if (cy > maxY) maxY = cy;
+              });
+              const cx = (minX + maxX) / 2;
+              const cy = (minY + maxY) / 2;
+              setTransform({
+                x: rect.width / 2 - cx,
+                y: rect.height / 2 - cy,
+                scale: 1,
+              });
+            } else {
+              setTransform({ x: 0, y: 0, scale: 1 });
+            }
           }}
-          className="p-1 hover:bg-black hover:text-white transition-colors cursor-pointer border-l border-neutral-300"
-          title="重置視圖"
+          className="p-1.5 border border-black hover:bg-black hover:text-white cursor-pointer"
         >
-          <RotateCcw size={14} />
+          <Maximize2 size={14} />
+        </button>
+        <button
+          id="btn-rearrange"
+          type="button"
+          onClick={onRearrangeLayout}
+          className="p-1.5 border border-black hover:bg-black hover:text-white cursor-pointer"
+        >
+          <RefreshCw size={14} />
         </button>
       </div>
 
-      {/* Legend / Status overlay */}
-      <div className="absolute bottom-3 left-3 z-20 text-[10px] font-mono bg-white/90 border border-black px-2 py-1 flex items-center gap-2">
-        <span>點擊角色以篩選關聯</span>
-        <span>·</span>
-        <span>點擊連線以編輯關係</span>
-      </div>
-
-      {/* SVG Canvas */}
+      {/* SVG Stage */}
       <svg
-        width="100%"
-        height="100%"
-        viewBox={`0 0 ${dimensions.width} ${dimensions.height}`}
-        className="w-full h-full"
+        ref={svgRef}
+        id="network-svg"
+        className="w-full h-full cursor-grab active:cursor-grabbing"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onWheel={handleWheel}
       >
-        <g
-          transform={`scale(${zoom})`}
-          style={{ transformOrigin: `${dimensions.width / 2}px ${dimensions.height / 2}px` }}
-        >
-          {/* Relationship Lines */}
-          {relationships.map((rel) => {
-            const posA = nodePositions.get(rel.characterAId);
-            const posB = nodePositions.get(rel.characterBId);
-            if (!posA || !posB) return null;
+        <defs>
+          {/* Arrowhead marker for directed lines */}
+          <marker
+            id="network-arrowhead"
+            viewBox="0 0 10 10"
+            refX="8"
+            refY="5"
+            markerWidth="6"
+            markerHeight="6"
+            orient="auto-start-reverse"
+          >
+            <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#000000" />
+          </marker>
 
-            const isHighlighted =
-              !selectedCharacterId ||
-              selectedCharacterId === rel.characterAId ||
-              selectedCharacterId === rel.characterBId;
+          {/* Highlighted Arrowhead marker */}
+          <marker
+            id="network-arrowhead-active"
+            viewBox="0 0 10 10"
+            refX="8"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto-start-reverse"
+          >
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#000000" />
+          </marker>
+        </defs>
 
-            const isHovered = hoveredRelId === rel.id;
-            const midX = (posA.x + posB.x) / 2;
-            const midY = (posA.y + posB.y) / 2;
+        {/* Background Clickable Area */}
+        <rect id="canvas-bg" width="100%" height="100%" fill="transparent" />
 
-            return (
-              <g
-                key={rel.id}
-                className="cursor-pointer transition-opacity"
-                opacity={isHighlighted ? 1 : 0.2}
-                onMouseEnter={() => setHoveredRelId(rel.id)}
-                onMouseLeave={() => setHoveredRelId(null)}
-                onClick={() => onSelectRelationship(rel)}
-              >
-                {/* Thick invisible hit target for easy clicking */}
-                <line
-                  x1={posA.x}
-                  y1={posA.y}
-                  x2={posB.x}
-                  y2={posB.y}
-                  stroke="transparent"
-                  strokeWidth={16}
-                />
+        {/* Zoom & Pan Group */}
+        <g transform={`translate(${transform.x}, ${transform.y}) scale(${transform.scale})`}>
+          {/* Relationships (Edges with 3 lines each) */}
+          <g id="network-relationships-layer">
+            {relationships.map((rel) => {
+              const charA = charMap.get(rel.sourceId);
+              const charB = charMap.get(rel.targetId);
+              if (!charA || !charB) return null;
 
-                {/* Visible relationship line */}
-                <line
-                  x1={posA.x}
-                  y1={posA.y}
-                  x2={posB.x}
-                  y2={posB.y}
-                  stroke={isHovered ? '#000000' : '#404040'}
-                  strokeWidth={isHovered ? 3 : 2}
-                  strokeDasharray={rel.surfaceRelation.includes('宿敵') ? '4 3' : undefined}
-                />
+              const ax = charA.x ?? 300;
+              const ay = charA.y ?? 300;
+              const bx = charB.x ?? 600;
+              const by = charB.y ?? 300;
 
-                {/* Surface Relation Pill at midpoint */}
-                <g transform={`translate(${midX}, ${midY})`}>
-                  <rect
-                    x={-((rel.surfaceRelation.length * 12 + 16) / 2)}
-                    y={-10}
-                    width={rel.surfaceRelation.length * 12 + 16}
-                    height={20}
-                    fill={isHovered ? '#000000' : '#ffffff'}
-                    stroke="#000000"
-                    strokeWidth={1.5}
-                  />
-                  <text
-                    textAnchor="middle"
-                    dominantBaseline="central"
-                    fill={isHovered ? '#ffffff' : '#000000'}
-                    fontSize={10}
-                    fontWeight="bold"
-                    fontFamily="monospace"
-                  >
-                    {rel.surfaceRelation}
-                  </text>
-                </g>
-              </g>
-            );
-          })}
+              const dx = bx - ax;
+              const dy = by - ay;
+              const dist = Math.sqrt(dx * dx + dy * dy) || 1;
 
-          {/* Character Nodes */}
-          {characters.map((char) => {
-            const pos = nodePositions.get(char.id);
-            if (!pos) return null;
+              // Unit tangent
+              const ux = dx / dist;
+              const uy = dy / dist;
 
-            const isSelected = selectedCharacterId === char.id;
-            const isRelated =
-              !selectedCharacterId ||
-              selectedCharacterId === char.id ||
-              relationships.some(
-                (r) =>
-                  (r.characterAId === selectedCharacterId && r.characterBId === char.id) ||
-                  (r.characterBId === selectedCharacterId && r.characterAId === char.id),
-              );
+              // Unit normal
+              const nx = -uy;
+              const ny = ux;
 
-            return (
-              <g
-                key={char.id}
-                transform={`translate(${pos.x}, ${pos.y})`}
-                className="cursor-pointer select-none"
-                opacity={isRelated ? 1 : 0.3}
-                onClick={() =>
-                  onSelectCharacter(selectedCharacterId === char.id ? null : char.id)
-                }
-              >
-                {/* Node Outer Circle */}
-                <circle
-                  r={22}
-                  fill={isSelected ? '#000000' : '#ffffff'}
-                  stroke="#000000"
-                  strokeWidth={isSelected ? 3 : 2}
-                  className="transition-all"
-                />
+              // Surface boundary points
+              const pA0 = { x: ax + ux * NODE_RADIUS, y: ay + uy * NODE_RADIUS };
+              const pB0 = { x: bx - ux * NODE_RADIUS, y: by - uy * NODE_RADIUS };
 
-                {/* Initial Letter or Character Name snippet */}
-                <text
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  fill={isSelected ? '#ffffff' : '#000000'}
-                  fontSize={12}
-                  fontWeight="900"
+              // Midpoint
+              const mx = (ax + bx) / 2;
+              const my = (ay + by) / 2;
+
+              // Curve bow offset (perpendicular distance)
+              const bow = Math.max(34, Math.min(64, dist * 0.18));
+
+              // 1. Surface line (center straight line)
+              const surfPathD = `M ${pA0.x} ${pA0.y} L ${pB0.x} ${pB0.y}`;
+
+              // 2. A -> B line (curves along +normal side, starts at A, ends at B with arrow)
+              const sAB = { x: pA0.x + nx * 8, y: pA0.y + ny * 8 };
+              const eAB = { x: pB0.x + nx * 8, y: pB0.y + ny * 8 };
+              const cAB = { x: mx + nx * bow, y: my + ny * bow };
+              const abPathD = `M ${sAB.x} ${sAB.y} Q ${cAB.x} ${cAB.y} ${eAB.x} ${eAB.y}`;
+
+              // 3. B -> A line (curves along -normal side, starts at B, ends at A with arrow)
+              const sBA = { x: pB0.x - nx * 8, y: pB0.y - ny * 8 };
+              const eBA = { x: pA0.x - nx * 8, y: pA0.y - ny * 8 };
+              const cBA = { x: mx - nx * bow, y: my - ny * bow };
+              const baPathD = `M ${sBA.x} ${sBA.y} Q ${cBA.x} ${cBA.y} ${eBA.x} ${eBA.y}`;
+
+              const isSelected = selectedRelationshipId === rel.id;
+              const isHovered = hoveredRelId === rel.id;
+              const active = isSelected || isHovered;
+
+              const surfPathId = `surf-path-${rel.id}`;
+              const abPathId = `ab-path-${rel.id}`;
+              const baPathId = `ba-path-${rel.id}`;
+
+              return (
+                <g
+                  key={rel.id}
+                  id={`relationship-group-${rel.id}`}
+                  className="cursor-pointer transition-opacity"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectRelationship(rel.id);
+                  }}
+                  onMouseEnter={() => setHoveredRelId(rel.id)}
+                  onMouseLeave={() => setHoveredRelId(null)}
                 >
-                  {char.name.slice(0, 1)}
-                </text>
+                  {/* Path Definitions for TextPath */}
+                  <defs>
+                    <path id={surfPathId} d={surfPathD} />
+                    <path id={abPathId} d={abPathD} />
+                    <path id={baPathId} d={baPathD} />
+                  </defs>
 
-                {/* Character Name Label below */}
-                <g transform="translate(0, 32)">
-                  <rect
-                    x={-((char.name.length * 12 + 12) / 2)}
-                    y={-8}
-                    width={char.name.length * 12 + 12}
-                    height={16}
+                  {/* Invisible broad click/hover trigger paths */}
+                  <path d={surfPathD} stroke="transparent" strokeWidth="16" fill="none" />
+                  <path d={abPathD} stroke="transparent" strokeWidth="18" fill="none" />
+                  <path d={baPathD} stroke="transparent" strokeWidth="18" fill="none" />
+
+                  {/* --- 1. Line 1: 表層關係 (Surface Line) --- */}
+                  <path
+                    d={surfPathD}
+                    stroke="#000000"
+                    strokeWidth={active ? '2.5' : '1.5'}
+                    strokeDasharray={active ? 'none' : '4 2'}
+                    fill="none"
+                  />
+                  {rel.surfaceRelation && (
+                    <text
+                      fill="#000000"
+                      fontSize="10"
+                      fontWeight="bold"
+                      stroke="#ffffff"
+                      strokeWidth="3.5"
+                      paintOrder="stroke fill"
+                      dominantBaseline="central"
+                    >
+                      <textPath href={`#${surfPathId}`} startOffset="50%" textAnchor="middle">
+                        {rel.surfaceRelation}
+                      </textPath>
+                    </text>
+                  )}
+
+                  {/* --- 2. Line 2: A -> B 單箭頭 (A對B真實想法) --- */}
+                  <path
+                    d={abPathD}
+                    stroke="#000000"
+                    strokeWidth={active ? '2.5' : '1.75'}
+                    fill="none"
+                    markerEnd={active ? 'url(#network-arrowhead-active)' : 'url(#network-arrowhead)'}
+                  />
+                  {rel.sourceToTargetThought && (
+                    <text
+                      fill="#000000"
+                      fontSize="10"
+                      fontWeight="bold"
+                      stroke="#ffffff"
+                      strokeWidth="3.5"
+                      paintOrder="stroke fill"
+                      dominantBaseline="central"
+                    >
+                      <textPath href={`#${abPathId}`} startOffset="50%" textAnchor="middle">
+                        {rel.sourceToTargetThought}
+                      </textPath>
+                    </text>
+                  )}
+
+                  {/* --- 3. Line 3: B -> A 單箭頭 (B對A真實想法) --- */}
+                  <path
+                    d={baPathD}
+                    stroke="#000000"
+                    strokeWidth={active ? '2.5' : '1.75'}
+                    fill="none"
+                    markerEnd={active ? 'url(#network-arrowhead-active)' : 'url(#network-arrowhead)'}
+                  />
+                  {rel.targetToSourceThought && (
+                    <text
+                      fill="#000000"
+                      fontSize="10"
+                      fontWeight="bold"
+                      stroke="#ffffff"
+                      strokeWidth="3.5"
+                      paintOrder="stroke fill"
+                      dominantBaseline="central"
+                    >
+                      <textPath href={`#${baPathId}`} startOffset="50%" textAnchor="middle">
+                        {rel.targetToSourceThought}
+                      </textPath>
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+          </g>
+
+          {/* Characters (Nodes) Layer */}
+          <g id="network-characters-layer">
+            {characters.map((char) => {
+              const cx = char.x ?? 300;
+              const cy = char.y ?? 300;
+              const isSelected = selectedCharacterId === char.id;
+              const isHovered = hoveredNodeId === char.id;
+              const isDragging = draggingNodeId === char.id;
+
+              return (
+                <g
+                  key={char.id}
+                  id={`character-node-${char.id}`}
+                  transform={`translate(${cx}, ${cy})`}
+                  className="cursor-move"
+                  onMouseDown={(e) => handleNodeMouseDown(e, char)}
+                  onMouseEnter={() => setHoveredNodeId(char.id)}
+                  onMouseLeave={() => setHoveredNodeId(null)}
+                >
+                  {/* Outer ring on selection or drag */}
+                  {(isSelected || isDragging || isHovered) && (
+                    <circle
+                      r={NODE_RADIUS + 5}
+                      fill="none"
+                      stroke="#000000"
+                      strokeWidth="1.5"
+                      strokeDasharray="3 2"
+                    />
+                  )}
+
+                  {/* Node Circle */}
+                  <circle
+                    r={NODE_RADIUS}
                     fill="#ffffff"
                     stroke="#000000"
-                    strokeWidth={1}
+                    strokeWidth={isSelected ? '3' : '2'}
                   />
+
+                  {/* Character Name */}
                   <text
                     textAnchor="middle"
                     dominantBaseline="central"
                     fill="#000000"
-                    fontSize={10}
+                    fontSize="11"
                     fontWeight="bold"
+                    pointerEvents="none"
                   >
                     {char.name}
                   </text>
                 </g>
-              </g>
-            );
-          })}
+              );
+            })}
+          </g>
         </g>
       </svg>
     </div>

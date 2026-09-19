@@ -80,19 +80,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>前台抽取</span>
           </button>
           <button
-            id="nav-tab-backend"
-            type="button"
-            onClick={() => onTabChange('backend')}
-            className={`flex items-center gap-1.5 px-4 py-1.5 text-sm font-bold transition-colors cursor-pointer border-l border-black ${
-              currentTab === 'backend'
-                ? 'bg-black text-white'
-                : 'bg-white text-black hover:bg-neutral-100'
-            }`}
-          >
-            <Sliders size={16} />
-            <span>後台控制台</span>
-          </button>
-          <button
             id="nav-tab-network"
             type="button"
             onClick={() => onTabChange('network')}
@@ -104,6 +91,19 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Network size={16} />
             <span>角色關係網</span>
+          </button>
+          <button
+            id="nav-tab-backend"
+            type="button"
+            onClick={() => onTabChange('backend')}
+            className={`flex items-center gap-1.5 px-4 py-1.5 text-sm font-bold transition-colors cursor-pointer border-l border-black ${
+              currentTab === 'backend'
+                ? 'bg-black text-white'
+                : 'bg-white text-black hover:bg-neutral-100'
+            }`}
+          >
+            <Sliders size={16} />
+            <span>後台控制台</span>
           </button>
         </div>
 

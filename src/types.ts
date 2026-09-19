@@ -92,121 +92,44 @@ export interface SimulationResult {
   runTimeMs: number;
 }
 
-// ─── 角色關係網 (Character Relationship Network) ───
-
-export interface DirectionalMetrics {
-  valence: number; // -120 to 120 (Valence)
-  attachment: number; // -120 to 120 (Attachment)
-  competence: number; // -120 to 120 (Competence)
-  admiration: number; // -120 to 120 (Admiration)
-  vulnerability: number; // -120 to 120 (Vulnerability)
+export interface RelationshipMetrics {
+  valence: number;       // -120 to 120
+  attachment: number;    // -120 to 120
+  competence: number;    // -120 to 120
+  admiration: number;    // -120 to 120
+  vulnerability: number; // -120 to 120
 }
 
-export type MetricKey = keyof DirectionalMetrics;
+export type MetricKey = keyof RelationshipMetrics;
 
-export interface MetricDefinition {
-  key: MetricKey;
-  name: string;
-  min: number;
-  max: number;
-  description: string;
-  negativeLabel: string;
-  positiveLabel: string;
-}
-
-export const METRIC_DEFINITIONS: MetricDefinition[] = [
-  {
-    key: 'valence',
-    name: 'Valence',
-    min: -120,
-    max: 120,
-    description: '好惡與正負情感傾向',
-    negativeLabel: '厭惡 / 排斥 (-120)',
-    positiveLabel: '喜愛 / 眷戀 (+120)',
-  },
-  {
-    key: 'attachment',
-    name: 'Attachment',
-    min: -120,
-    max: 120,
-    description: '依戀與親密依賴度',
-    negativeLabel: '疏離 / 防備 (-120)',
-    positiveLabel: '深層依附 / 依賴 (+120)',
-  },
-  {
-    key: 'competence',
-    name: 'Competence',
-    min: -120,
-    max: 120,
-    description: '對對方能力與實力的評價',
-    negativeLabel: '質疑 / 不可靠 (-120)',
-    positiveLabel: '認可 / 敬畏信任 (+120)',
-  },
-  {
-    key: 'admiration',
-    name: 'Admiration',
-    min: -120,
-    max: 120,
-    description: '崇拜與價值認同度',
-    negativeLabel: '鄙夷 / 否定理念 (-120)',
-    positiveLabel: '崇拜 / 視為榜樣 (+120)',
-  },
-  {
-    key: 'vulnerability',
-    name: 'Vulnerability',
-    min: -120,
-    max: 120,
-    description: '願意在對方面前展現脆弱與防備卸下程度',
-    negativeLabel: '完全武裝 / 封閉 (-120)',
-    positiveLabel: '完全坦誠 / 卸下心防 (+120)',
-  },
-];
-
-export const DEFAULT_DIRECTIONAL_METRICS: DirectionalMetrics = {
-  valence: 0,
-  attachment: 0,
-  competence: 0,
-  admiration: 0,
-  vulnerability: 0,
-};
-
-export interface NetworkCharacterTrait {
-  id?: string;
-  name: string;
-  intensity?: string;
-  axis?: string;
-  description?: string;
+export interface CharacterRelationship {
+  id: string;
+  sourceId: string;
+  targetId: string;
+  surfaceRelation: string;          // 表層關係 (e.g. "朋友")
+  sourceToTargetThought: string;    // A對B的真實想法 (e.g. "不太熟的朋友的朋友")
+  targetToSourceThought: string;    // B對A的真實想法 (e.g. "好朋友")
+  sourceToTargetMetrics: RelationshipMetrics; // A對B的5條數值
+  targetToSourceMetrics: RelationshipMetrics; // B對A的5條數值
 }
 
 export interface NetworkCharacter {
   id: string;
   name: string;
+  avatarColor?: string;
   notes?: string;
-  traits?: NetworkCharacterTrait[];
-  color?: string; // Hex or identifier for visual graph
-  createdAt: number;
+  traitsSummary?: string[];
+  x?: number;
+  y?: number;
+  vx?: number;
+  vy?: number;
+  fx?: number | null;
+  fy?: number | null;
 }
 
-export interface RelationshipDirection {
-  trueThought: string; // 角色當對方是什麼的真實想法
-  metrics: DirectionalMetrics; // 5條單向數值條 (-120 ~ 120)
-}
-
-export interface CharacterRelationship {
-  id: string;
-  characterAId: string;
-  characterBId: string;
-  surfaceRelation: string; // 表層關係，例如「朋友」、「同事」
-  aToB: RelationshipDirection; // A 對 B 的真實想法與 5 條單向數值條
-  bToA: RelationshipDirection; // B 對 A 的真實想法與 5 條單向數值條
+export interface NetworkData {
+  version: number;
   updatedAt: number;
-}
-
-export interface RelationshipNetworkData {
-  version: string;
-  exportedAt?: string;
   characters: NetworkCharacter[];
   relationships: CharacterRelationship[];
-  updatedAt: number;
 }
-

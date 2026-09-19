@@ -1,6 +1,6 @@
 {
   "name": "OC設定抽取器",
-  "description": "現代背景角色性格與心理設定抽取器，具備共現權重、軟硬排除、5項單向心理數值角色關係網與IndexedDB暫存",
+  "description": "現代背景角色性格與心理設定抽取器，具備共現權重、軟硬排除、強度常態分布與矩陣熱力圖審核",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
