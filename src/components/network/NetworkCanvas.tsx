@@ -316,6 +316,13 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
 
               // 1. Surface line (center straight line)
               const surfPathD = `M ${pA0.x} ${pA0.y} L ${pB0.x} ${pB0.y}`;
+              const surfDx = pB0.x - pA0.x;
+              const surfDy = pB0.y - pA0.y;
+              const surfAngle = (Math.atan2(surfDy, surfDx) * 180) / Math.PI;
+              const surfFlipped = surfAngle > 90 || surfAngle < -90;
+              const surfTextPathD = surfFlipped
+                ? `M ${pB0.x} ${pB0.y} L ${pA0.x} ${pA0.y}`
+                : `M ${pA0.x} ${pA0.y} L ${pB0.x} ${pB0.y}`;
 
               // 2. A -> B line (curves along +normal side, starts at A, ends at B with arrow)
               const sAB = { x: pA0.x + nx * 8, y: pA0.y + ny * 8 };
@@ -323,19 +330,45 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
               const cAB = { x: mx + nx * bow, y: my + ny * bow };
               const abPathD = `M ${sAB.x} ${sAB.y} Q ${cAB.x} ${cAB.y} ${eAB.x} ${eAB.y}`;
 
+              const abDx = eAB.x - sAB.x;
+              const abDy = eAB.y - sAB.y;
+              const abAngle = (Math.atan2(abDy, abDx) * 180) / Math.PI;
+              const abFlipped = abAngle > 90 || abAngle < -90;
+              const abTextPathD = abFlipped
+                ? `M ${eAB.x} ${eAB.y} Q ${cAB.x} ${cAB.y} ${sAB.x} ${sAB.y}`
+                : `M ${sAB.x} ${sAB.y} Q ${cAB.x} ${cAB.y} ${eAB.x} ${eAB.y}`;
+              const abDisplayText = rel.sourceToTargetThought
+                ? abFlipped
+                  ? `${rel.sourceToTargetThought}`
+                  : `${rel.sourceToTargetThought}`
+                : '';
+
               // 3. B -> A line (curves along -normal side, starts at B, ends at A with arrow)
               const sBA = { x: pB0.x - nx * 8, y: pB0.y - ny * 8 };
               const eBA = { x: pA0.x - nx * 8, y: pA0.y - ny * 8 };
               const cBA = { x: mx - nx * bow, y: my - ny * bow };
               const baPathD = `M ${sBA.x} ${sBA.y} Q ${cBA.x} ${cBA.y} ${eBA.x} ${eBA.y}`;
 
+              const baDx = eBA.x - sBA.x;
+              const baDy = eBA.y - sBA.y;
+              const baAngle = (Math.atan2(baDy, baDx) * 180) / Math.PI;
+              const baFlipped = baAngle > 90 || baAngle < -90;
+              const baTextPathD = baFlipped
+                ? `M ${eBA.x} ${eBA.y} Q ${cBA.x} ${cBA.y} ${sBA.x} ${sBA.y}`
+                : `M ${sBA.x} ${sBA.y} Q ${cBA.x} ${cBA.y} ${eBA.x} ${eBA.y}`;
+              const baDisplayText = rel.targetToSourceThought
+                ? baFlipped
+                  ? `${rel.targetToSourceThought}`
+                  : `${rel.targetToSourceThought}`
+                : '';
+
               const isSelected = selectedRelationshipId === rel.id;
               const isHovered = hoveredRelId === rel.id;
               const active = isSelected || isHovered;
 
-              const surfPathId = `surf-path-${rel.id}`;
-              const abPathId = `ab-path-${rel.id}`;
-              const baPathId = `ba-path-${rel.id}`;
+              const surfTextPathId = `surf-text-path-${rel.id}`;
+              const abTextPathId = `ab-text-path-${rel.id}`;
+              const baTextPathId = `ba-text-path-${rel.id}`;
 
               return (
                 <g
@@ -351,9 +384,9 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                 >
                   {/* Path Definitions for TextPath */}
                   <defs>
-                    <path id={surfPathId} d={surfPathD} />
-                    <path id={abPathId} d={abPathD} />
-                    <path id={baPathId} d={baPathD} />
+                    <path id={surfTextPathId} d={surfTextPathD} />
+                    <path id={abTextPathId} d={abTextPathD} />
+                    <path id={baTextPathId} d={baTextPathD} />
                   </defs>
 
                   {/* Invisible broad click/hover trigger paths */}
@@ -379,7 +412,12 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                       paintOrder="stroke fill"
                       dominantBaseline="central"
                     >
-                      <textPath href={`#${surfPathId}`} startOffset="50%" textAnchor="middle">
+                      <textPath
+                        href={`#${surfTextPathId}`}
+                        xlinkHref={`#${surfTextPathId}`}
+                        startOffset="50%"
+                        textAnchor="middle"
+                      >
                         {rel.surfaceRelation}
                       </textPath>
                     </text>
@@ -393,7 +431,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                     fill="none"
                     markerEnd={active ? 'url(#network-arrowhead-active)' : 'url(#network-arrowhead)'}
                   />
-                  {rel.sourceToTargetThought && (
+                  {abDisplayText && (
                     <text
                       fill="#000000"
                       fontSize="10"
@@ -403,8 +441,13 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                       paintOrder="stroke fill"
                       dominantBaseline="central"
                     >
-                      <textPath href={`#${abPathId}`} startOffset="50%" textAnchor="middle">
-                        {rel.sourceToTargetThought}
+                      <textPath
+                        href={`#${abTextPathId}`}
+                        xlinkHref={`#${abTextPathId}`}
+                        startOffset="50%"
+                        textAnchor="middle"
+                      >
+                        {abDisplayText}
                       </textPath>
                     </text>
                   )}
@@ -417,7 +460,7 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                     fill="none"
                     markerEnd={active ? 'url(#network-arrowhead-active)' : 'url(#network-arrowhead)'}
                   />
-                  {rel.targetToSourceThought && (
+                  {baDisplayText && (
                     <text
                       fill="#000000"
                       fontSize="10"
@@ -427,8 +470,13 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
                       paintOrder="stroke fill"
                       dominantBaseline="central"
                     >
-                      <textPath href={`#${baPathId}`} startOffset="50%" textAnchor="middle">
-                        {rel.targetToSourceThought}
+                      <textPath
+                        href={`#${baTextPathId}`}
+                        xlinkHref={`#${baTextPathId}`}
+                        startOffset="50%"
+                        textAnchor="middle"
+                      >
+                        {baDisplayText}
                       </textPath>
                     </text>
                   )}

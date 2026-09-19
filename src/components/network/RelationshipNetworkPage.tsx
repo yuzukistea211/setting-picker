@@ -8,22 +8,25 @@ import {
   Edit2,
   Trash2,
   ArrowRight,
-  ExternalLink,
+  Plus,
+  X,
+  Check,
 } from 'lucide-react';
 import {
   NetworkData,
   NetworkCharacter,
   CharacterRelationship,
   RelationshipMetrics,
+  IntensityLevel,
 } from '../../types';
 import {
   loadNetworkData,
   saveNetworkData,
   resetToDefaultNetworkData,
 } from '../../lib/storage';
+import { DEFAULT_DATASET } from '../../data/defaultTraits';
 import { NetworkCanvas } from './NetworkCanvas';
 import { RelationshipModal } from './RelationshipModal';
-import { CharacterModal } from './CharacterModal';
 
 export const RelationshipNetworkPage: React.FC = () => {
   const [networkData, setNetworkData] = useState<NetworkData>({
@@ -42,8 +45,13 @@ export const RelationshipNetworkPage: React.FC = () => {
   const [isRelModalOpen, setIsRelModalOpen] = useState<boolean>(false);
   const [editingRel, setEditingRel] = useState<CharacterRelationship | null>(null);
 
-  const [isCharModalOpen, setIsCharModalOpen] = useState<boolean>(false);
-  const [editingChar, setEditingChar] = useState<NetworkCharacter | null>(null);
+  // In-inspector character editing states
+  const [isEditingCharInInspector, setIsEditingCharInInspector] = useState<boolean>(false);
+  const [editCharName, setEditCharName] = useState<string>('');
+  const [editCharNotes, setEditCharNotes] = useState<string>('');
+  const [editCharTraits, setEditCharTraits] = useState<string[]>([]);
+  const [newTraitText, setNewTraitText] = useState<string>('');
+  const [newTraitIntensity, setNewTraitIntensity] = useState<IntensityLevel | ''>('中等');
 
   // File input refs for import
   const charFileInputRef = useRef<HTMLInputElement>(null);
@@ -59,6 +67,18 @@ export const RelationshipNetworkPage: React.FC = () => {
       setIsLoading(false);
     });
   }, []);
+
+  // Sync editor fields when selected character changes
+  useEffect(() => {
+    const char = networkData.characters.find((c) => c.id === selectedCharacterId);
+    if (char) {
+      setEditCharName(char.name || '');
+      setEditCharNotes(char.notes || '');
+      setEditCharTraits(char.traitsSummary || []);
+      setNewTraitText('');
+    }
+    setIsEditingCharInInspector(false);
+  }, [selectedCharacterId]);
 
   // Save to state and IndexedDB
   const updateNetwork = (updater: (prev: NetworkData) => NetworkData) => {
@@ -140,7 +160,60 @@ export const RelationshipNetworkPage: React.FC = () => {
     }));
     if (selectedCharacterId === charId) {
       setSelectedCharacterId(null);
+      setIsEditingCharInInspector(false);
     }
+  };
+
+  const handleAddNewCharacter = () => {
+    const newId = `char-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const n = networkData.characters.length;
+    const newChar: NetworkCharacter = {
+      id: newId,
+      name: '新角色',
+      avatarColor: '#111111',
+      notes: '',
+      traitsSummary: [],
+      x: 300 + (n % 4) * 120,
+      y: 240 + Math.floor(n / 4) * 120,
+    };
+    handleSaveCharacter(newChar);
+    setSelectedCharacterId(newId);
+    setSelectedRelationshipId(null);
+    setEditCharName('新角色');
+    setEditCharNotes('');
+    setEditCharTraits([]);
+    setIsEditingCharInInspector(true);
+  };
+
+  const handleAddTrait = () => {
+    const trimmed = newTraitText.trim();
+    if (!trimmed) return;
+    const formatted = newTraitIntensity && !trimmed.startsWith('【')
+      ? `【${newTraitIntensity}】${trimmed}`
+      : trimmed;
+    if (!editCharTraits.includes(formatted)) {
+      setEditCharTraits([...editCharTraits, formatted]);
+    }
+    setNewTraitText('');
+  };
+
+  const handleRemoveTrait = (indexToRemove: number) => {
+    setEditCharTraits((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  const handleSaveInspectorChar = () => {
+    const char = networkData.characters.find((c) => c.id === selectedCharacterId);
+    if (!char || !editCharName.trim()) return;
+
+    const updatedChar: NetworkCharacter = {
+      ...char,
+      name: editCharName.trim(),
+      notes: editCharNotes.trim(),
+      traitsSummary: editCharTraits,
+    };
+
+    handleSaveCharacter(updatedChar);
+    setIsEditingCharInInspector(false);
   };
 
   // Relationship operations
@@ -330,10 +403,7 @@ export const RelationshipNetworkPage: React.FC = () => {
           <button
             id="btn-add-character"
             type="button"
-            onClick={() => {
-              setEditingChar(null);
-              setIsCharModalOpen(true);
-            }}
+            onClick={handleAddNewCharacter}
             className="flex items-center gap-1.5 px-3 py-1.5 border border-black bg-white text-xs font-bold hover:bg-black hover:text-white cursor-pointer"
           >
             <UserPlus size={14} />
@@ -500,24 +570,32 @@ export const RelationshipNetworkPage: React.FC = () => {
               </div>
             </div>
           ) : selectedChar ? (
-            /* Selected Character Card */
+            /* Selected Character Card & Inspector */
             <div
               id="inspector-character-details"
               className="border-2 border-black bg-(--main-color) p-3.5 flex flex-col gap-3"
             >
               <div className="flex items-center justify-between border-b-2 border-black pb-2">
                 <span className="font-mono text-xs px-2 py-0.5 border border-black bg-black text-white font-bold">
-                  角色詳情
+                  {isEditingCharInInspector ? '編輯角色' : '角色詳情'}
                 </span>
                 <div className="flex items-center gap-1">
                   <button
                     id="btn-inspect-edit-char"
                     type="button"
                     onClick={() => {
-                      setEditingChar(selectedChar);
-                      setIsCharModalOpen(true);
+                      if (!isEditingCharInInspector) {
+                        setEditCharName(selectedChar.name || '');
+                        setEditCharNotes(selectedChar.notes || '');
+                        setEditCharTraits(selectedChar.traitsSummary || []);
+                        setIsEditingCharInInspector(true);
+                      } else {
+                        setIsEditingCharInInspector(false);
+                      }
                     }}
-                    className="p-1 border border-black hover:bg-black hover:text-white cursor-pointer"
+                    className={`p-1 border border-black hover:bg-black hover:text-white cursor-pointer ${
+                      isEditingCharInInspector ? 'bg-black text-white' : ''
+                    }`}
                   >
                     <Edit2 size={13} />
                   </button>
@@ -532,44 +610,221 @@ export const RelationshipNetworkPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="font-black text-base">{selectedChar.name}</span>
-              </div>
+              {isEditingCharInInspector ? (
+                /* Inline Character & Traits Editor */
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="input-character-name" className="text-xs font-mono font-bold">
+                      角色姓名
+                    </label>
+                    <input
+                      id="input-character-name"
+                      type="text"
+                      value={editCharName}
+                      onChange={(e) => setEditCharName(e.target.value)}
+                      placeholder="輸入角色姓名"
+                      autoFocus
+                      className="border border-black px-2 py-1.5 text-sm bg-white font-bold"
+                    />
+                  </div>
 
-              {selectedChar.notes && (
-                <div className="border border-black p-2 text-xs bg-neutral-50 font-mono">
-                  {selectedChar.notes}
-                </div>
-              )}
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="input-character-notes" className="text-xs font-mono font-bold">
+                      角色簡述 / 備註
+                    </label>
+                    <textarea
+                      id="input-character-notes"
+                      value={editCharNotes}
+                      onChange={(e) => setEditCharNotes(e.target.value)}
+                      rows={3}
+                      placeholder="自訂角色備註或設定"
+                      className="border border-black p-2 text-xs bg-white resize-none font-normal"
+                    />
+                  </div>
 
-              {selectedChar.traitsSummary && selectedChar.traitsSummary.length > 0 && (
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs font-mono font-bold">抽取性格詞條</span>
-                  <div className="flex flex-wrap gap-1">
-                    {selectedChar.traitsSummary.map((t, idx) => (
-                      <span
-                        key={idx}
-                        className="text-[11px] px-1.5 py-0.5 border border-black bg-neutral-50 font-mono"
+                  {/* Character Traits Editor Section */}
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-mono font-bold">
+                        角色詞條 ({editCharTraits.length})
+                      </label>
+                      {editCharTraits.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setEditCharTraits([])}
+                          className="text-[11px] font-mono text-neutral-600 hover:text-black underline cursor-pointer"
+                        >
+                          清空
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-1 min-h-[32px] p-2 border border-black bg-white">
+                      {editCharTraits.length === 0 ? (
+                        <span className="text-[11px] font-mono text-neutral-400 py-0.5">
+                          尚無詞條
+                        </span>
+                      ) : (
+                        editCharTraits.map((t, idx) => (
+                          <span
+                            key={idx}
+                            className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 border border-black bg-neutral-50 font-mono"
+                          >
+                            <span>{t}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveTrait(idx)}
+                              className="text-neutral-500 hover:text-black cursor-pointer ml-0.5"
+                            >
+                              <X size={11} />
+                            </button>
+                          </span>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Add new trait input */}
+                    <div className="flex items-center gap-1 pt-1">
+                      <select
+                        id="select-trait-intensity"
+                        value={newTraitIntensity}
+                        onChange={(e) => setNewTraitIntensity(e.target.value as IntensityLevel | '')}
+                        className="border border-black px-1.5 py-1 text-xs font-mono bg-white cursor-pointer"
                       >
-                        {t}
-                      </span>
-                    ))}
+                        <option value="">無強度</option>
+                        <option value="中等">中等</option>
+                        <option value="輕微">輕微</option>
+                        <option value="強烈">強烈</option>
+                        <option value="極端">極端</option>
+                        <option value="隱藏">隱藏</option>
+                      </select>
+
+                      <input
+                        id="input-character-trait"
+                        type="text"
+                        list="datalist-preset-traits"
+                        value={newTraitText}
+                        onChange={(e) => setNewTraitText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddTrait();
+                          }
+                        }}
+                        placeholder="輸入或選擇詞條"
+                        className="border border-black px-2 py-1 text-xs flex-1 bg-white font-mono min-w-0"
+                      />
+
+                      <button
+                        id="btn-add-trait"
+                        type="button"
+                        onClick={handleAddTrait}
+                        disabled={!newTraitText.trim()}
+                        className="px-2.5 py-1 border border-black bg-black text-white text-xs font-bold hover:bg-neutral-800 disabled:opacity-40 cursor-pointer flex items-center gap-1 shrink-0"
+                      >
+                        <Plus size={13} />
+                        <span>新增</span>
+                      </button>
+                    </div>
+
+                    <datalist id="datalist-preset-traits">
+                      {DEFAULT_DATASET.traits.map((pt) => (
+                        <option key={pt.id} value={pt.name}>
+                          {pt.axis}
+                        </option>
+                      ))}
+                    </datalist>
+                  </div>
+
+                  {/* Save / Cancel buttons */}
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t-2 border-black">
+                    <button
+                      id="btn-cancel-edit-char"
+                      type="button"
+                      onClick={() => {
+                        setEditCharName(selectedChar.name || '');
+                        setEditCharNotes(selectedChar.notes || '');
+                        setEditCharTraits(selectedChar.traitsSummary || []);
+                        setIsEditingCharInInspector(false);
+                      }}
+                      className="px-3.5 py-1.5 border border-black text-xs font-bold hover:bg-neutral-100 cursor-pointer"
+                    >
+                      取消
+                    </button>
+                    <button
+                      id="btn-save-edit-char"
+                      type="button"
+                      onClick={handleSaveInspectorChar}
+                      disabled={!editCharName.trim()}
+                      className="flex items-center gap-1 px-4 py-1.5 border-2 border-black bg-black text-white text-xs font-bold hover:bg-neutral-800 disabled:opacity-40 cursor-pointer"
+                    >
+                      <Check size={13} />
+                      <span>儲存</span>
+                    </button>
                   </div>
                 </div>
-              )}
+              ) : (
+                /* View Mode */
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-black text-base">{selectedChar.name}</span>
+                  </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingRel(null);
-                  setIsRelModalOpen(true);
-                }}
-                disabled={networkData.characters.length < 2}
-                className="mt-2 flex items-center justify-center gap-1.5 px-3 py-1.5 border border-black text-xs font-bold hover:bg-black hover:text-white cursor-pointer"
-              >
-                <Link2 size={14} />
-                <span>建立此角色的新關係</span>
-              </button>
+                  {selectedChar.notes && (
+                    <div className="border border-black p-2 text-xs bg-neutral-50 font-mono">
+                      {selectedChar.notes}
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono font-bold">性格詞條</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditCharName(selectedChar.name || '');
+                          setEditCharNotes(selectedChar.notes || '');
+                          setEditCharTraits(selectedChar.traitsSummary || []);
+                          setIsEditingCharInInspector(true);
+                        }}
+                        className="text-[11px] font-mono underline hover:font-bold cursor-pointer"
+                      >
+                        編輯
+                      </button>
+                    </div>
+
+                    {selectedChar.traitsSummary && selectedChar.traitsSummary.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {selectedChar.traitsSummary.map((t, idx) => (
+                          <span
+                            key={idx}
+                            className="text-[11px] px-1.5 py-0.5 border border-black bg-neutral-50 font-mono"
+                          >
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="border border-dashed border-black/40 p-2 text-xs font-mono text-neutral-500">
+                        無性格詞條
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingRel(null);
+                      setIsRelModalOpen(true);
+                    }}
+                    disabled={networkData.characters.length < 2}
+                    className="mt-1 flex items-center justify-center gap-1.5 px-3 py-1.5 border border-black text-xs font-bold hover:bg-black hover:text-white cursor-pointer"
+                  >
+                    <Link2 size={14} />
+                    <span>建立此角色的新關係</span>
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             /* Relationships & Characters Directory List */
@@ -631,15 +886,6 @@ export const RelationshipNetworkPage: React.FC = () => {
         onSave={handleSaveRelationship}
         onDelete={handleDeleteRelationship}
         onClose={() => setIsRelModalOpen(false)}
-      />
-
-      {/* Character Modal */}
-      <CharacterModal
-        isOpen={isCharModalOpen}
-        character={editingChar}
-        onSave={handleSaveCharacter}
-        onDelete={handleDeleteCharacter}
-        onClose={() => setIsCharModalOpen(false)}
       />
     </div>
   );
