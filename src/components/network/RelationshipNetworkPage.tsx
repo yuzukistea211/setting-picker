@@ -60,16 +60,6 @@ export const RelationshipNetworkPage: React.FC = () => {
   // Save timeout ref for debouncing position drag saves
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Clean up debounce timer on unmount to prevent memory leaks
-  useEffect(() => {
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = null;
-      }
-    };
-  }, []);
-
   // Initial load from IndexedDB
   useEffect(() => {
     loadNetworkData().then((data) => {

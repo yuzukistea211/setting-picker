@@ -28,29 +28,20 @@ export function runBatchSimulation(
     };
   }
 
-  // Pre-allocated reusable arrays & set to eliminate object allocation & GC churn across thousands of simulation runs
+  // Pre-allocated reusable arrays to eliminate object allocation & GC churn across thousands of simulation runs
   const selectedTraits: Trait[] = [];
-  const selectedTraitIndices: number[] = [];
   const selectedIntensities: IntensityLevel[] = [];
   const candidatePool: Trait[] = [];
-  const candidateIndices: number[] = [];
   const candidateWeights: number[] = [];
-  const satisfiedAxesSet = new Set<string>();
-
-  const hardMatrix = index.hardMatrix;
-  const softMultiplierMatrix = index.softMultiplierMatrix;
-  const coocWeightMatrix = index.coocWeightMatrix;
-  const coocModifiersMatrix = index.coocModifiersMatrix;
 
   for (let r = 0; r < runs; r++) {
     selectedTraits.length = 0;
-    selectedTraitIndices.length = 0;
     selectedIntensities.length = 0;
-    satisfiedAxesSet.clear();
+
+    const satisfiedAxesSet = new Set<string>();
 
     while (selectedTraits.length < traitCount) {
       candidatePool.length = 0;
-      candidateIndices.length = 0;
       candidateWeights.length = 0;
 
       // Check if there are specified axes not yet satisfied
@@ -67,22 +58,20 @@ export function runBatchSimulation(
       // Step 1: Collect non-hard-excluded, unselected candidates
       for (let t = 0; t < numTraits; t++) {
         const candidate = traits[t];
-
-        // Check if already selected (linear scan on max 7 items is faster than Set hashing)
+        // Check if already selected
         let alreadySelected = false;
-        for (let s = 0; s < selectedTraitIndices.length; s++) {
-          if (selectedTraitIndices[s] === t) {
+        for (let s = 0; s < selectedTraits.length; s++) {
+          if (selectedTraits[s].id === candidate.id) {
             alreadySelected = true;
             break;
           }
         }
         if (alreadySelected) continue;
 
-        // Check hard exclusions via flat typed array (zero string allocation, O(1) direct memory offset)
+        // Check hard exclusions with all currently selected traits in O(1) time
         let hardExcluded = false;
-        const rowOffset = t * numTraits;
-        for (let s = 0; s < selectedTraitIndices.length; s++) {
-          if (hardMatrix[rowOffset + selectedTraitIndices[s]] === 1) {
+        for (let s = 0; s < selectedTraits.length; s++) {
+          if (index.hardMap.has(`${candidate.id}:${selectedTraits[s].id}`)) {
             hardExcluded = true;
             break;
           }
@@ -99,25 +88,24 @@ export function runBatchSimulation(
 
         // Apply co-occurrence weights & soft exclusion penalties
         let softPenaltyMultiplier = 1;
-        for (let s = 0; s < selectedTraitIndices.length; s++) {
-          const selIdx = selectedTraitIndices[s];
+        for (let s = 0; s < selectedTraits.length; s++) {
+          const selTrait = selectedTraits[s];
           const selIntensity = selectedIntensities[s];
-          const matrixOffset = selIdx * numTraits + t;
 
-          // Co-occurrence from Int8Array
-          let coocWeight = coocWeightMatrix[matrixOffset];
-          const mods = coocModifiersMatrix[matrixOffset];
-          if (mods && selIntensity && mods[selIntensity]) {
-            coocWeight += mods[selIntensity]!;
-          }
-          if (coocWeight !== 0) {
+          // Co-occurrence
+          const coocRule = index.coocMap.get(`${selTrait.id}:${candidate.id}`);
+          if (coocRule) {
+            let coocWeight = coocRule.weight;
+            if (selIntensity && coocRule.intensityModifiers && coocRule.intensityModifiers[selIntensity]) {
+              coocWeight += coocRule.intensityModifiers[selIntensity]!;
+            }
             weight += coocWeight * 1.5;
           }
 
-          // Soft exclusion from Float32Array
-          const softMult = softMultiplierMatrix[matrixOffset];
-          if (softMult !== 1.0) {
-            softPenaltyMultiplier *= softMult;
+          // Soft exclusion
+          const softRule = index.softMap.get(`${selTrait.id}:${candidate.id}`);
+          if (softRule) {
+            softPenaltyMultiplier *= softRule.penaltyMultiplier;
           }
         }
 
@@ -125,7 +113,6 @@ export function runBatchSimulation(
         weight = Math.max(0.05, weight);
 
         candidatePool.push(candidate);
-        candidateIndices.push(t);
         candidateWeights.push(weight);
       }
 
@@ -139,53 +126,49 @@ export function runBatchSimulation(
 
       let rand = Math.random() * totalWeight;
       let chosenCandidate = candidatePool[0];
-      let chosenIndex = candidateIndices[0];
 
       for (let w = 0; w < candidateWeights.length; w++) {
         rand -= candidateWeights[w];
         if (rand <= 0) {
           chosenCandidate = candidatePool[w];
-          chosenIndex = candidateIndices[w];
           break;
         }
       }
 
       const intensity = sampleIntensity();
       selectedTraits.push(chosenCandidate);
-      selectedTraitIndices.push(chosenIndex);
       selectedIntensities.push(intensity);
       satisfiedAxesSet.add(chosenCandidate.axis);
     }
 
-    // Step 3: Count weak compatibilities pairwise without any string or object allocations
+    // Step 3: Count weak compatibilities pairwise without creating description objects
     const numSelected = selectedTraits.length;
     for (let i = 0; i < numSelected; i++) {
-      const idxA = selectedTraitIndices[i];
       const traitA = selectedTraits[i];
       const intensityA = selectedIntensities[i];
-      const rowOffset = idxA * numTraits;
 
       countMap[traitA.id]++;
       intensityMap[traitA.id][intensityA]++;
 
       for (let j = i + 1; j < numSelected; j++) {
-        const idxB = selectedTraitIndices[j];
-        const matrixOffset = rowOffset + idxB;
+        const traitB = selectedTraits[j];
 
-        // Soft exclusion (< 1.0 penalty multiplier means soft exclusion exists)
-        if (softMultiplierMatrix[matrixOffset] < 1.0) {
+        // Soft exclusion
+        if (index.softMap.has(`${traitA.id}:${traitB.id}`)) {
           totalWeakCompatibilities++;
           continue;
         }
 
         // Negative co-occurrence <= -4
-        let coocWeight = coocWeightMatrix[matrixOffset];
-        const mods = coocModifiersMatrix[matrixOffset];
-        if (mods && intensityA && mods[intensityA]) {
-          coocWeight += mods[intensityA]!;
-        }
-        if (coocWeight <= -4) {
-          totalWeakCompatibilities++;
+        const coocRule = index.coocMap.get(`${traitA.id}:${traitB.id}`);
+        if (coocRule) {
+          let coocWeight = coocRule.weight;
+          if (intensityA && coocRule.intensityModifiers && coocRule.intensityModifiers[intensityA]) {
+            coocWeight += coocRule.intensityModifiers[intensityA]!;
+          }
+          if (coocWeight <= -4) {
+            totalWeakCompatibilities++;
+          }
         }
       }
     }

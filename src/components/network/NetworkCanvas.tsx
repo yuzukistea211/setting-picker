@@ -75,19 +75,6 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
     }
   }, []);
 
-  // Pan & Drag RAF throttling refs to prevent GC thrashing and redundant fiber renders
-  const panRafRef = useRef<number | null>(null);
-  const dragRafRef = useRef<number | null>(null);
-  const pendingPanRef = useRef<{ tx: number; ty: number } | null>(null);
-  const pendingDragRef = useRef<{ id: string; x: number; y: number } | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (panRafRef.current !== null) cancelAnimationFrame(panRafRef.current);
-      if (dragRafRef.current !== null) cancelAnimationFrame(dragRafRef.current);
-    };
-  }, []);
-
   // Pan handlers on SVG background
   const handleMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
     // Only pan if clicked directly on svg background
@@ -109,63 +96,23 @@ export const NetworkCanvas: React.FC<NetworkCanvasProps> = ({
       if (isPanning) {
         const dx = e.clientX - panStartRef.current.x;
         const dy = e.clientY - panStartRef.current.y;
-        pendingPanRef.current = {
-          tx: panStartRef.current.tx + dx,
-          ty: panStartRef.current.ty + dy,
-        };
-        if (panRafRef.current === null) {
-          panRafRef.current = requestAnimationFrame(() => {
-            panRafRef.current = null;
-            if (pendingPanRef.current) {
-              setTransform((prev) => ({
-                ...prev,
-                x: pendingPanRef.current!.tx,
-                y: pendingPanRef.current!.ty,
-              }));
-            }
-          });
-        }
+        setTransform((prev) => ({
+          ...prev,
+          x: panStartRef.current.tx + dx,
+          y: panStartRef.current.ty + dy,
+        }));
       } else if (draggingNodeId) {
         const dx = (e.clientX - dragStartRef.current.startX) / transform.scale;
         const dy = (e.clientY - dragStartRef.current.startY) / transform.scale;
         const newX = Math.round(dragStartRef.current.nodeStartX + dx);
         const newY = Math.round(dragStartRef.current.nodeStartY + dy);
-        pendingDragRef.current = { id: draggingNodeId, x: newX, y: newY };
-
-        if (dragRafRef.current === null) {
-          dragRafRef.current = requestAnimationFrame(() => {
-            dragRafRef.current = null;
-            if (pendingDragRef.current) {
-              onUpdateCharacterPosition(
-                pendingDragRef.current.id,
-                pendingDragRef.current.x,
-                pendingDragRef.current.y,
-              );
-            }
-          });
-        }
+        onUpdateCharacterPosition(draggingNodeId, newX, newY);
       }
     },
     [isPanning, draggingNodeId, transform.scale, onUpdateCharacterPosition],
   );
 
   const handleMouseUp = () => {
-    if (panRafRef.current !== null) {
-      cancelAnimationFrame(panRafRef.current);
-      panRafRef.current = null;
-    }
-    if (dragRafRef.current !== null) {
-      cancelAnimationFrame(dragRafRef.current);
-      dragRafRef.current = null;
-    }
-    if (pendingDragRef.current) {
-      onUpdateCharacterPosition(
-        pendingDragRef.current.id,
-        pendingDragRef.current.x,
-        pendingDragRef.current.y,
-      );
-      pendingDragRef.current = null;
-    }
     setIsPanning(false);
     setDraggingNodeId(null);
   };
