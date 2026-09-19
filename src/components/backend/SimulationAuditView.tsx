@@ -234,7 +234,7 @@ export const SimulationAuditView: React.FC<SimulationAuditViewProps> = ({ datase
           </div>
         </div>
       ) : (
-        <div className="border-2 border-dashed border-black py-16 text-center">
+        <div className="border border-dashed border-black py-16 text-center">
           <span className="text-xs font-mono">請點擊上方「執行批次模擬審核」開始運算</span>
         </div>
       )}

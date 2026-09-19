@@ -213,7 +213,7 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
   return (
     <section
       id="panel-result"
-      className="w-full lg:w-2/3 border-2 border-black bg-white p-4 flex flex-col gap-6"
+      className="w-full lg:w-2/3 border-2 border-black bg-(--main-color) p-4 flex flex-col gap-6"
     >
       {/* Top action bar */}
       <div className="flex flex-wrap items-center justify-between border-b-2 border-black pb-3 gap-2">
@@ -466,7 +466,7 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
               <div className="flex items-center gap-2">
                 <FileText size={16} />
                 <span className="text-xs font-black tracking-wider uppercase">
-                  角色備註與設定筆記
+                  設定筆記
                 </span>
               </div>
             </div>
@@ -501,7 +501,7 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
                     className="text-xs font-bold flex items-center gap-1"
                   >
                     <FileText size={13} />
-                    <span>自訂備註 / 角色筆記：</span>
+                    <span>自訂備註 ：</span>
                   </label>
                   <span className="text-[10px] font-mono text-neutral-400">
                     {(currentResult.notes || '').length} 字

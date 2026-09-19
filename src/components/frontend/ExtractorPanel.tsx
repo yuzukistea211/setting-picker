@@ -36,7 +36,7 @@ export const ExtractorPanel: React.FC<ExtractorPanelProps> = ({
   return (
     <aside
       id="panel-extractor"
-      className="w-full lg:w-1/3 border-2 border-black bg-white p-4 flex flex-col justify-between gap-6"
+      className="w-full lg:w-1/3 border-2 border-black bg-(--main-color) p-4 flex flex-col justify-between gap-6"
     >
       <div className="flex flex-col gap-6">
         {/* Header bar of panel */}

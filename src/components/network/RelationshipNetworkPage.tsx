@@ -325,7 +325,7 @@ export const RelationshipNetworkPage: React.FC = () => {
       />
 
       {/* Top Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-2 border-black p-2.5 bg-white">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-2 border-black p-2.5 bg-(--main-color)">
         <div className="flex flex-wrap items-center gap-2">
           <button
             id="btn-add-character"

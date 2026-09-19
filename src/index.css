@@ -5,6 +5,7 @@
   /* 全域字體控制變數 - 修改此變數即可切換全站字體 */
   --main-font: "CEF Fonts CJK Mono";
   --accent-color: #000000;
+  --main-color: rgba(255,255,255,0.9);
 }
 
 @theme {

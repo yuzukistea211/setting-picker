@@ -51,7 +51,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header id="app-header" className="w-full border-b-2 border-black bg-white sticky top-0 z-50">
+    <header id="app-header" className="w-full border-b-2 border-black bg-(--main-color) sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
         {/* Title */}
         <div className="flex items-center gap-3">
