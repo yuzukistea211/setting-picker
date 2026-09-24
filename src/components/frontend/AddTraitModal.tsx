@@ -113,7 +113,7 @@ export const AddTraitModal: React.FC<AddTraitModalProps> = ({
               type="text"
               value={searchKeyword}
               onChange={(e) => setSearchKeyword(e.target.value)}
-              placeholder="搜尋詞條名稱、軸線或心理學描述..."
+              placeholder="搜尋詞條名稱、軸線或描述..."
               className="w-full pl-9 pr-8 py-2 text-xs border border-black focus:outline-none focus:bg-neutral-50"
               autoFocus
             />

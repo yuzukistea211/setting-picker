@@ -174,7 +174,7 @@ const CellEditorDrawer: React.FC<CellEditorDrawerProps> = React.memo(({
                 type="text"
                 value={softNote}
                 onChange={(e) => setSoftNote(e.target.value)}
-                placeholder="心理學弱相容備註（如：非完全排斥但極罕見之張力）"
+                placeholder="弱相容備註"
                 className="border border-black p-1.5 text-xs bg-white focus:outline-none"
               />
             </div>

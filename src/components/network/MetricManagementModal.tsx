@@ -114,7 +114,7 @@ export const MetricManagementModal: React.FC<MetricManagementModalProps> = ({
         {/* Content */}
         <div className="p-4 flex-1 overflow-y-auto flex flex-col gap-4">
           <p className="text-xs text-neutral-600">
-            自訂關係網中的心理數值維度名稱（範圍為 -120 到 +120）。您可以自由新增、重新命名、調整排序或移除指標。
+            自訂關係網中的數值維度名稱（範圍為 -120 到 +120）。您可以自由新增、重新命名、調整排序或移除指標。
           </p>
 
           {/* Add New Metric */}

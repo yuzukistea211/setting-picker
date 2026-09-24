@@ -167,7 +167,7 @@ export const ExtractorPanel: React.FC<ExtractorPanelProps> = ({
             className="flex items-center gap-1.5 p-2 border border-black bg-neutral-100 text-xs font-mono font-bold text-black"
           >
             <Lock size={13} className="shrink-0" />
-            <span>已鎖定 {lockedCount} 個詞條（抽取時將予以保留）</span>
+            <span>已鎖定 {lockedCount} 個詞條</span>
           </div>
         )}
 
@@ -201,7 +201,7 @@ export const ExtractorPanel: React.FC<ExtractorPanelProps> = ({
           }}
           className="w-full py-2 border border-black text-xs font-bold hover:bg-black hover:text-white transition-colors cursor-pointer"
         >
-          重設所有指定條件
+          重設
         </button>
       </div>
     </aside>

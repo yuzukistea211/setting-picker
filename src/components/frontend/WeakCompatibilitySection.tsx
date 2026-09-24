@@ -19,7 +19,7 @@ export const WeakCompatibilitySection: React.FC<WeakCompatibilitySectionProps> =
       <div className="flex items-center gap-2 border-b border-black pb-2">
         <AlertTriangle size={16} />
         <span className="text-xs font-black tracking-wider uppercase">
-          弱相容心理動態解析 ({weakCompatibilities.length})
+          弱相容解析 ({weakCompatibilities.length})
         </span>
       </div>
 

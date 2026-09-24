@@ -1080,18 +1080,18 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                 {/* Description */}
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-bold text-neutral-800">
-                    詳細心理與性格描述 <span className="text-rose-600">*</span>
+                    詳細描述 <span className="text-rose-600">*</span>
                   </label>
                   <textarea
                     required
                     rows={5}
                     value={formDescription}
                     onChange={(e) => setFormDescription(e.target.value)}
-                    placeholder="輸入該性格詞條的心理動態、人際互動表現、深層防禦機制或矛盾特質..."
+                    placeholder="輸入該詞條的特質..."
                     className="border-2 border-black p-2.5 text-xs focus:outline-none resize-none leading-relaxed"
                   />
                   <span className="text-[10px] text-neutral-500 font-mono">
-                    此描述將於抽取結果與角色性格分析中完整呈現。
+                    此描述將於抽取結果中完整呈現。
                   </span>
                 </div>
 

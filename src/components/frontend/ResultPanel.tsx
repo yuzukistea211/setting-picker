@@ -55,14 +55,14 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
       text += `─── 角色自訂備註 ───\n${currentResult.notes.trim()}\n\n`;
     }
 
-    text += `─── 性格與心理詞條 ───\n`;
+    text += `─── 詞條 ───\n`;
     currentResult.traits.forEach((item, index) => {
       const lockMark = item.locked ? ' [🔒已鎖定]' : '';
       text += `${index + 1}. [${item.axis}] 【${item.intensity}】${item.trait.name}${lockMark}\n   ${item.trait.description}\n`;
     });
 
     if (currentResult.weakCompatibilities.length > 0) {
-      text += `\n─── 弱相容心理動態註解 ───\n`;
+      text += `\n─── 弱相容註解 ───\n`;
       currentResult.weakCompatibilities.forEach((wc, idx) => {
         text += `${idx + 1}. [弱相容] 【${wc.intensityA}】${wc.traitA.name} × 【${wc.intensityB}】${wc.traitB.name}\n   註解：${wc.note}\n`;
       });
@@ -181,7 +181,7 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
               type="button"
               onClick={() => setIsAddModalOpen(true)}
               className="flex items-center gap-1 px-3 py-1.5 border border-black bg-black text-white text-xs font-bold hover:bg-white hover:text-black transition-colors cursor-pointer"
-              title="自由從心理學詞庫中加入新詞條至目前角色"
+              title="自由從詞庫中加入新詞條至目前角色"
             >
               <Plus size={14} />
               <span>加入詞條</span>
@@ -235,7 +235,7 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
               type="button"
               onClick={() => setIsAddModalOpen(true)}
               className="border-2 border-dashed border-black/40 hover:border-black p-4 bg-neutral-50/40 hover:bg-neutral-50 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all min-h-[120px] group"
-              title="自由挑選心理學詞庫中的詞條加入角色"
+              title="自由挑選詞條加入角色"
             >
               <div className="p-2 border border-black rounded-full bg-white group-hover:bg-black group-hover:text-white transition-colors">
                 <Plus size={16} />

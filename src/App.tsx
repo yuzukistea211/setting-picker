@@ -86,7 +86,7 @@ export default function App() {
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 flex flex-col gap-6">
         {isLoadingDB ? (
           <div className="border-2 border-black p-12 text-center text-xs font-mono">
-            載入心理學詞庫資料中...
+            載入詞庫資料中...
           </div>
         ) : currentTab === 'frontend' ? (
           /* Frontend: 33% Left Panel + 66% Right Panel */
