@@ -11,6 +11,7 @@ import {
   Plus,
   X,
   Check,
+  Sliders,
 } from 'lucide-react';
 import {
   NetworkData,
@@ -18,20 +19,25 @@ import {
   CharacterRelationship,
   RelationshipMetrics,
   IntensityLevel,
+  MetricDefinition,
 } from '../../types';
 import {
   loadNetworkData,
   saveNetworkData,
   resetToDefaultNetworkData,
+  DEFAULT_METRIC_DEFINITIONS,
+  migrateNetworkData,
 } from '../../lib/storage';
 import { DEFAULT_DATASET } from '../../data/defaultTraits';
 import { NetworkCanvas } from './NetworkCanvas';
 import { RelationshipModal } from './RelationshipModal';
+import { MetricManagementModal } from './MetricManagementModal';
 
 export const RelationshipNetworkPage: React.FC = () => {
   const [networkData, setNetworkData] = useState<NetworkData>({
-    version: 1,
+    version: 2,
     updatedAt: Date.now(),
+    metricDefinitions: DEFAULT_METRIC_DEFINITIONS,
     characters: [],
     relationships: [],
   });
@@ -44,6 +50,7 @@ export const RelationshipNetworkPage: React.FC = () => {
   // Modal states
   const [isRelModalOpen, setIsRelModalOpen] = useState<boolean>(false);
   const [editingRel, setEditingRel] = useState<CharacterRelationship | null>(null);
+  const [isMetricModalOpen, setIsMetricModalOpen] = useState<boolean>(false);
 
   // In-inspector character editing states
   const [isEditingCharInInspector, setIsEditingCharInInspector] = useState<boolean>(false);
@@ -216,6 +223,14 @@ export const RelationshipNetworkPage: React.FC = () => {
     setIsEditingCharInInspector(false);
   };
 
+  // Metric definition operations
+  const handleUpdateMetricDefinitions = (newDefs: MetricDefinition[]) => {
+    updateNetwork((prev) => ({
+      ...prev,
+      metricDefinitions: newDefs,
+    }));
+  };
+
   // Relationship operations
   const handleSaveRelationship = (rel: CharacterRelationship) => {
     updateNetwork((prev) => {
@@ -270,12 +285,7 @@ export const RelationshipNetworkPage: React.FC = () => {
       try {
         const parsed = JSON.parse(event.target?.result as string);
         if (parsed && Array.isArray(parsed.characters) && Array.isArray(parsed.relationships)) {
-          const validated: NetworkData = {
-            version: parsed.version || 1,
-            updatedAt: Date.now(),
-            characters: parsed.characters,
-            relationships: parsed.relationships,
-          };
+          const validated = migrateNetworkData(parsed);
           setNetworkData(validated);
           saveNetworkData(validated).catch(console.error);
         }
@@ -433,6 +443,16 @@ export const RelationshipNetworkPage: React.FC = () => {
             <Link2 size={14} />
             <span>新增關係</span>
           </button>
+
+          <button
+            id="btn-manage-metrics"
+            type="button"
+            onClick={() => setIsMetricModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-black bg-white text-xs font-bold hover:bg-black hover:text-white cursor-pointer"
+          >
+            <Sliders size={14} />
+            <span>自訂指標名稱 ({(networkData.metricDefinitions || DEFAULT_METRIC_DEFINITIONS).length})</span>
+          </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -546,8 +566,21 @@ export const RelationshipNetworkPage: React.FC = () => {
                     {selectedRel.sourceToTargetThought || '（未填寫）'}
                   </span>
                 </div>
-                <div className="grid grid-cols-1 gap-1 pt-1 font-mono text-[11px]">
-                  {renderMetricSummary(selectedRel.sourceToTargetMetrics)}
+                <div className="flex items-center justify-between pt-1">
+                  <span className="font-mono text-[10px] text-neutral-500">數值指標 (-120 ~ +120)</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsMetricModalOpen(true)}
+                    className="text-[10px] font-mono underline hover:font-bold cursor-pointer text-neutral-600 hover:text-black"
+                  >
+                    自訂名稱
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-1 font-mono text-[11px]">
+                  {renderMetricSummary(
+                    selectedRel.sourceToTargetMetrics,
+                    networkData.metricDefinitions || DEFAULT_METRIC_DEFINITIONS,
+                  )}
                 </div>
               </div>
 
@@ -564,8 +597,21 @@ export const RelationshipNetworkPage: React.FC = () => {
                     {selectedRel.targetToSourceThought || '（未填寫）'}
                   </span>
                 </div>
-                <div className="grid grid-cols-1 gap-1 pt-1 font-mono text-[11px]">
-                  {renderMetricSummary(selectedRel.targetToSourceMetrics)}
+                <div className="flex items-center justify-between pt-1">
+                  <span className="font-mono text-[10px] text-neutral-500">數值指標 (-120 ~ +120)</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsMetricModalOpen(true)}
+                    className="text-[10px] font-mono underline hover:font-bold cursor-pointer text-neutral-600 hover:text-black"
+                  >
+                    自訂名稱
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-1 font-mono text-[11px]">
+                  {renderMetricSummary(
+                    selectedRel.targetToSourceMetrics,
+                    networkData.metricDefinitions || DEFAULT_METRIC_DEFINITIONS,
+                  )}
                 </div>
               </div>
             </div>
@@ -882,32 +928,41 @@ export const RelationshipNetworkPage: React.FC = () => {
         isOpen={isRelModalOpen}
         relationship={editingRel}
         characters={networkData.characters}
+        metricDefinitions={networkData.metricDefinitions || DEFAULT_METRIC_DEFINITIONS}
         initialSourceId={selectedCharacterId || undefined}
         onSave={handleSaveRelationship}
         onDelete={handleDeleteRelationship}
         onClose={() => setIsRelModalOpen(false)}
+        onUpdateMetricDefinitions={handleUpdateMetricDefinitions}
+        onOpenMetricSettings={() => setIsMetricModalOpen(true)}
+      />
+
+      {/* Metric Management Modal */}
+      <MetricManagementModal
+        isOpen={isMetricModalOpen}
+        metricDefinitions={networkData.metricDefinitions || DEFAULT_METRIC_DEFINITIONS}
+        onSave={handleUpdateMetricDefinitions}
+        onClose={() => setIsMetricModalOpen(false)}
       />
     </div>
   );
 };
 
-function renderMetricSummary(m: RelationshipMetrics) {
-  const metrics: { key: keyof RelationshipMetrics; label: string }[] = [
-    { key: 'valence', label: 'Valence' },
-    { key: 'attachment', label: 'Attachment' },
-    { key: 'competence', label: 'Competence' },
-    { key: 'admiration', label: 'Admiration' },
-    { key: 'vulnerability', label: 'Vulnerability' },
-  ];
+function renderMetricSummary(m: RelationshipMetrics, metricDefinitions: MetricDefinition[]) {
+  if (!metricDefinitions || metricDefinitions.length === 0) {
+    return <div className="text-[11px] text-neutral-400 font-mono">尚無設定數值指標</div>;
+  }
 
-  return metrics.map((item) => {
-    const val = m[item.key];
+  return metricDefinitions.map((item) => {
+    const val = m[item.id] ?? 0;
     const width = Math.min(100, Math.max(0, (Math.abs(val) / 120) * 50));
     const left = val >= 0 ? 50 : 50 - width;
 
     return (
-      <div key={item.key} className="flex items-center justify-between gap-2 py-0.5">
-        <span className="w-24 text-[11px] font-bold">{item.label}</span>
+      <div key={item.id} className="flex items-center justify-between gap-2 py-0.5">
+        <span className="w-24 text-[11px] font-bold truncate" title={item.name}>
+          {item.name}
+        </span>
         <div className="relative flex-1 h-2 bg-neutral-200 border border-black">
           <div className="absolute left-1/2 top-0 bottom-0 w-[1px] bg-black" />
           <div

@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Edit2, Check, X, Trash2 } from 'lucide-react';
 
 interface MetricBarSliderProps {
   id: string;
   name: string;
   value: number;
   onChange: (newValue: number) => void;
+  onRename?: (newName: string) => void;
+  onDelete?: () => void;
 }
 
 export const MetricBarSlider: React.FC<MetricBarSliderProps> = ({
@@ -12,7 +15,12 @@ export const MetricBarSlider: React.FC<MetricBarSliderProps> = ({
   name,
   value,
   onChange,
+  onRename,
+  onDelete,
 }) => {
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempName, setTempName] = useState(name);
+
   const clampedValue = Math.max(-120, Math.min(120, Math.round(value)));
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -21,6 +29,23 @@ export const MetricBarSlider: React.FC<MetricBarSliderProps> = ({
       onChange(Math.max(-120, Math.min(120, parsed)));
     } else {
       onChange(0);
+    }
+  };
+
+  const handleSaveName = () => {
+    if (tempName.trim() && onRename) {
+      onRename(tempName.trim());
+    }
+    setIsEditingName(false);
+  };
+
+  const handleKeyDownName = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveName();
+    } else if (e.key === 'Escape') {
+      setTempName(name);
+      setIsEditingName(false);
     }
   };
 
@@ -33,8 +58,71 @@ export const MetricBarSlider: React.FC<MetricBarSliderProps> = ({
   return (
     <div id={`metric-control-${id}`} className="flex flex-col gap-1.5 border border-black p-2 bg-white">
       <div className="flex items-center justify-between text-xs">
-        <span className="font-bold tracking-tight">{name}</span>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-2">
+          {isEditingName ? (
+            <div className="flex items-center gap-1">
+              <input
+                type="text"
+                value={tempName}
+                onChange={(e) => setTempName(e.target.value)}
+                onKeyDown={handleKeyDownName}
+                autoFocus
+                className="border border-black px-1 py-0.5 text-xs font-bold bg-neutral-50 w-28"
+                placeholder="指標名稱"
+              />
+              <button
+                type="button"
+                onClick={handleSaveName}
+                className="p-0.5 border border-black hover:bg-black hover:text-white cursor-pointer"
+                title="儲存名稱"
+              >
+                <Check size={11} />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTempName(name);
+                  setIsEditingName(false);
+                }}
+                className="p-0.5 border border-black hover:bg-black hover:text-white cursor-pointer"
+                title="取消"
+              >
+                <X size={11} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 group">
+              <span className="font-bold tracking-tight truncate max-w-[140px]" title={name}>
+                {name}
+              </span>
+              {onRename && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTempName(name);
+                    setIsEditingName(true);
+                  }}
+                  className="opacity-40 group-hover:opacity-100 hover:text-black p-0.5 cursor-pointer text-neutral-600"
+                  title="修改指標名稱"
+                >
+                  <Edit2 size={10} />
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  className="opacity-40 group-hover:opacity-100 hover:text-red-600 p-0.5 cursor-pointer text-neutral-600"
+                  title="刪除此指標"
+                >
+                  <Trash2 size={10} />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
             onClick={() => onChange(Math.max(-120, clampedValue - 10))}

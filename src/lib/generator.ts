@@ -29,42 +29,130 @@ export interface DatasetIndex {
   softMap: Map<string, SoftExclusionRule>;
   coocMap: Map<string, CooccurrenceRule>;
   traitMap: Map<string, Trait>;
+  traitIndexMap: Map<string, number>;
+  numTraits: number;
+  hardMatrix: Uint8Array;
+  softMultiplierMatrix: Float32Array;
+  coocWeightMatrix: Int8Array;
+  coocModifiersMatrix: (Record<string, number> | null)[];
+}
+
+interface CachedDatasetEntry {
+  index: DatasetIndex;
+  updatedAt?: number;
+  traitsLength: number;
+  coocLength: number;
+  softLength: number;
+  hardLength: number;
 }
 
 // Memory-safe WeakMap cache: automatically garbage collected when a dataset is discarded
-const datasetIndexCache = new WeakMap<Dataset, DatasetIndex>();
+const datasetIndexCache = new WeakMap<Dataset, CachedDatasetEntry>();
+
+export function invalidateDatasetIndexCache(dataset?: Dataset) {
+  if (dataset) {
+    datasetIndexCache.delete(dataset);
+  }
+}
 
 export function getDatasetIndex(dataset: Dataset): DatasetIndex {
-  let index = datasetIndexCache.get(dataset);
-  if (!index) {
-    const hardMap = new Map<string, HardExclusionRule>();
-    const softMap = new Map<string, SoftExclusionRule>();
-    const coocMap = new Map<string, CooccurrenceRule>();
-    const traitMap = new Map<string, Trait>();
-
-    for (let i = 0; i < dataset.traits.length; i++) {
-      const t = dataset.traits[i];
-      traitMap.set(t.id, t);
-    }
-    for (let i = 0; i < dataset.hardExclusions.length; i++) {
-      const h = dataset.hardExclusions[i];
-      hardMap.set(`${h.traitAId}:${h.traitBId}`, h);
-      hardMap.set(`${h.traitBId}:${h.traitAId}`, h);
-    }
-    for (let i = 0; i < dataset.softExclusions.length; i++) {
-      const s = dataset.softExclusions[i];
-      softMap.set(`${s.traitAId}:${s.traitBId}`, s);
-      softMap.set(`${s.traitBId}:${s.traitAId}`, s);
-    }
-    for (let i = 0; i < dataset.cooccurrenceRules.length; i++) {
-      const c = dataset.cooccurrenceRules[i];
-      coocMap.set(`${c.traitAId}:${c.traitBId}`, c);
-      coocMap.set(`${c.traitBId}:${c.traitAId}`, c);
-    }
-
-    index = { hardMap, softMap, coocMap, traitMap };
-    datasetIndexCache.set(dataset, index);
+  const cached = datasetIndexCache.get(dataset);
+  if (
+    cached &&
+    cached.updatedAt === dataset.updatedAt &&
+    cached.traitsLength === dataset.traits.length &&
+    cached.coocLength === dataset.cooccurrenceRules.length &&
+    cached.softLength === dataset.softExclusions.length &&
+    cached.hardLength === dataset.hardExclusions.length
+  ) {
+    return cached.index;
   }
+
+  const hardMap = new Map<string, HardExclusionRule>();
+  const softMap = new Map<string, SoftExclusionRule>();
+  const coocMap = new Map<string, CooccurrenceRule>();
+  const traitMap = new Map<string, Trait>();
+  const traitIndexMap = new Map<string, number>();
+
+  const numTraits = dataset.traits.length;
+  const matrixSize = numTraits * numTraits;
+  const hardMatrix = new Uint8Array(matrixSize);
+  const softMultiplierMatrix = new Float32Array(matrixSize);
+  softMultiplierMatrix.fill(1.0);
+  const coocWeightMatrix = new Int8Array(matrixSize);
+  const coocModifiersMatrix: (Record<string, number> | null)[] = new Array(matrixSize).fill(null);
+
+  for (let i = 0; i < numTraits; i++) {
+    const t = dataset.traits[i];
+    traitMap.set(t.id, t);
+    traitIndexMap.set(t.id, i);
+  }
+
+  for (let i = 0; i < dataset.hardExclusions.length; i++) {
+    const h = dataset.hardExclusions[i];
+    hardMap.set(`${h.traitAId}:${h.traitBId}`, h);
+    hardMap.set(`${h.traitBId}:${h.traitAId}`, h);
+
+    const idxA = traitIndexMap.get(h.traitAId);
+    const idxB = traitIndexMap.get(h.traitBId);
+    if (idxA !== undefined && idxB !== undefined) {
+      hardMatrix[idxA * numTraits + idxB] = 1;
+      hardMatrix[idxB * numTraits + idxA] = 1;
+    }
+  }
+
+  for (let i = 0; i < dataset.softExclusions.length; i++) {
+    const s = dataset.softExclusions[i];
+    softMap.set(`${s.traitAId}:${s.traitBId}`, s);
+    softMap.set(`${s.traitBId}:${s.traitAId}`, s);
+
+    const idxA = traitIndexMap.get(s.traitAId);
+    const idxB = traitIndexMap.get(s.traitBId);
+    if (idxA !== undefined && idxB !== undefined) {
+      softMultiplierMatrix[idxA * numTraits + idxB] = s.penaltyMultiplier;
+      softMultiplierMatrix[idxB * numTraits + idxA] = s.penaltyMultiplier;
+    }
+  }
+
+  for (let i = 0; i < dataset.cooccurrenceRules.length; i++) {
+    const c = dataset.cooccurrenceRules[i];
+    coocMap.set(`${c.traitAId}:${c.traitBId}`, c);
+    coocMap.set(`${c.traitBId}:${c.traitAId}`, c);
+
+    const idxA = traitIndexMap.get(c.traitAId);
+    const idxB = traitIndexMap.get(c.traitBId);
+    if (idxA !== undefined && idxB !== undefined) {
+      coocWeightMatrix[idxA * numTraits + idxB] = c.weight;
+      coocWeightMatrix[idxB * numTraits + idxA] = c.weight;
+      if (c.intensityModifiers) {
+        coocModifiersMatrix[idxA * numTraits + idxB] = c.intensityModifiers;
+        coocModifiersMatrix[idxB * numTraits + idxA] = c.intensityModifiers;
+      }
+    }
+  }
+
+  const index: DatasetIndex = {
+    hardMap,
+    softMap,
+    coocMap,
+    traitMap,
+    traitIndexMap,
+    numTraits,
+    hardMatrix,
+    softMultiplierMatrix,
+    coocWeightMatrix,
+    coocModifiersMatrix,
+  };
+
+  datasetIndexCache.set(dataset, {
+    index,
+    updatedAt: dataset.updatedAt,
+    traitsLength: dataset.traits.length,
+    coocLength: dataset.cooccurrenceRules.length,
+    softLength: dataset.softExclusions.length,
+    hardLength: dataset.hardExclusions.length,
+  });
+
   return index;
 }
 

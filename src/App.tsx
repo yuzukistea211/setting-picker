@@ -11,6 +11,26 @@ import { StarrySpaceBackground } from './components/StarrySpaceBackground';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<'frontend' | 'backend' | 'network'>('frontend');
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('oc_dark_mode') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleDarkMode = () => {
+    setIsDarkMode((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('oc_dark_mode', String(next));
+      } catch (err) {
+        console.error(err);
+      }
+      return next;
+    });
+  };
+
   const { dataset, isLoadingDB, saveDataset, importDataset, resetDataset } = useDataset();
 
   const {
@@ -58,6 +78,8 @@ export default function App() {
         dataset={dataset}
         onImportDataset={importDataset}
         onResetDataset={handleResetDataset}
+        isDarkMode={isDarkMode}
+        onToggleDarkMode={handleToggleDarkMode}
       />
 
       {/* Main Workspace Area */}
@@ -106,6 +128,19 @@ export default function App() {
           <BackendDashboard dataset={dataset} onSaveDataset={saveDataset} />
         )}
       </main>
+
+      {/* Full-page invert backdrop filter for night mode */}
+      {isDarkMode && (
+        <div
+          id="dark-mode-invert-overlay"
+          className="fixed inset-0 pointer-events-none z-[99999]"
+          style={{
+            backdropFilter: 'invert(1)',
+            WebkitBackdropFilter: 'invert(1)',
+          }}
+          aria-hidden="true"
+        />
+      )}
     </div>
   );
 }

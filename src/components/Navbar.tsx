@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Download, Upload, RotateCcw, Sliders, Dices, Network, Rat } from 'lucide-react';
+import { Download, Upload, RotateCcw, Sliders, Dices, Network, Rat, Moon, Sun } from 'lucide-react';
 import { Dataset } from '../types';
 
 interface NavbarProps {
@@ -8,6 +8,8 @@ interface NavbarProps {
   dataset: Dataset;
   onImportDataset: (dataset: Dataset) => void;
   onResetDataset: () => void;
+  isDarkMode: boolean;
+  onToggleDarkMode: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -16,6 +18,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   dataset,
   onImportDataset,
   onResetDataset,
+  isDarkMode,
+  onToggleDarkMode,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -142,6 +146,16 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <RotateCcw size={14} />
             <span>重設詞庫</span>
+          </button>
+          <button
+            id="btn-toggle-dark-mode"
+            type="button"
+            onClick={onToggleDarkMode}
+            className="flex items-center gap-1 px-2.5 py-1.5 border border-black text-xs font-bold hover:bg-black hover:text-white transition-colors cursor-pointer"
+            title={isDarkMode ? '切換為日間模式' : '切換為夜間模式'}
+          >
+            {isDarkMode ? <Sun size={14} /> : <Moon size={14} />}
+            <span>{isDarkMode ? '日間模式' : '夜間模式'}</span>
           </button>
         </div>
       </div>

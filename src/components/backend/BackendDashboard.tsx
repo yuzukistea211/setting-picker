@@ -13,68 +13,133 @@ interface BackendDashboardProps {
 export const BackendDashboard: React.FC<BackendDashboardProps> = ({ dataset, onSaveDataset }) => {
   const [activeTab, setActiveTab] = useState<'matrix' | 'details' | 'simulation'>('matrix');
 
-  const handleUpdateCooccurrence = (rule: CooccurrenceRule) => {
-    const existingIndex = dataset.cooccurrenceRules.findIndex(
-      (r) =>
-        (r.traitAId === rule.traitAId && r.traitBId === rule.traitBId) ||
-        (r.traitAId === rule.traitBId && r.traitBId === rule.traitAId),
-    );
+  // Atomic update for matrix cell rules (eliminates race conditions and stale closure overwrites)
+  const handleSaveCellRules = (params: {
+    traitAId: string;
+    traitBId: string;
+    isHard: boolean;
+    hardReason: string;
+    isSoft: boolean;
+    softPenalty: number;
+    softNote: string;
+    coocWeight: number;
+  }) => {
+    const {
+      traitAId,
+      traitBId,
+      isHard,
+      hardReason,
+      isSoft,
+      softPenalty,
+      softNote,
+      coocWeight,
+    } = params;
 
-    let updatedRules = [...dataset.cooccurrenceRules];
-    if (existingIndex >= 0) {
-      updatedRules[existingIndex] = rule;
-    } else {
-      updatedRules.push(rule);
+    const isPair = (a: string, b: string) =>
+      (a === traitAId && b === traitBId) || (a === traitBId && b === traitAId);
+
+    // Filter out all existing rules between trait A and trait B
+    const updatedHard = dataset.hardExclusions.filter((r) => !isPair(r.traitAId, r.traitBId));
+    if (isHard) {
+      updatedHard.push({
+        id: `hard-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        traitAId,
+        traitBId,
+        reason: hardReason.trim() || '性格設定邏輯互斥',
+      });
     }
-    onSaveDataset({ ...dataset, cooccurrenceRules: updatedRules });
+
+    const updatedSoft = dataset.softExclusions.filter((r) => !isPair(r.traitAId, r.traitBId));
+    if (isSoft) {
+      updatedSoft.push({
+        id: `soft-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        traitAId,
+        traitBId,
+        penaltyMultiplier: Math.round(Number(softPenalty) * 100) / 100,
+        note: softNote.trim() || '弱相容情境說明',
+      });
+    }
+
+    const updatedCooc = dataset.cooccurrenceRules.filter((r) => !isPair(r.traitAId, r.traitBId));
+    if (coocWeight !== 0) {
+      updatedCooc.push({
+        id: `co-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        traitAId,
+        traitBId,
+        weight: Number(coocWeight),
+      });
+    }
+
+    const updatedDataset: Dataset = {
+      ...dataset,
+      updatedAt: Date.now(),
+      hardExclusions: updatedHard,
+      softExclusions: updatedSoft,
+      cooccurrenceRules: updatedCooc,
+    };
+
+    onSaveDataset(updatedDataset);
+  };
+
+  const handleUpdateCooccurrence = (rule: CooccurrenceRule) => {
+    const isPair = (a: string, b: string) =>
+      (a === rule.traitAId && b === rule.traitBId) || (a === rule.traitBId && b === rule.traitAId);
+
+    const updatedRules = dataset.cooccurrenceRules.filter((r) => !isPair(r.traitAId, r.traitBId));
+    updatedRules.push(rule);
+
+    onSaveDataset({
+      ...dataset,
+      updatedAt: Date.now(),
+      cooccurrenceRules: updatedRules,
+    });
   };
 
   const handleUpdateSoftExclusion = (rule: SoftExclusionRule) => {
-    const existingIndex = dataset.softExclusions.findIndex(
-      (r) =>
-        (r.traitAId === rule.traitAId && r.traitBId === rule.traitBId) ||
-        (r.traitAId === rule.traitBId && r.traitBId === rule.traitAId),
-    );
+    const isPair = (a: string, b: string) =>
+      (a === rule.traitAId && b === rule.traitBId) || (a === rule.traitBId && b === rule.traitAId);
 
-    let updatedRules = [...dataset.softExclusions];
-    if (existingIndex >= 0) {
-      updatedRules[existingIndex] = rule;
-    } else {
-      updatedRules.push(rule);
-    }
-    onSaveDataset({ ...dataset, softExclusions: updatedRules });
+    const updatedRules = dataset.softExclusions.filter((r) => !isPair(r.traitAId, r.traitBId));
+    updatedRules.push(rule);
+
+    onSaveDataset({
+      ...dataset,
+      updatedAt: Date.now(),
+      softExclusions: updatedRules,
+    });
   };
 
   const handleUpdateHardExclusion = (rule: HardExclusionRule) => {
-    const existingIndex = dataset.hardExclusions.findIndex(
-      (r) =>
-        (r.traitAId === rule.traitAId && r.traitBId === rule.traitBId) ||
-        (r.traitAId === rule.traitBId && r.traitBId === rule.traitAId),
-    );
+    const isPair = (a: string, b: string) =>
+      (a === rule.traitAId && b === rule.traitBId) || (a === rule.traitBId && b === rule.traitAId);
 
-    let updatedRules = [...dataset.hardExclusions];
-    if (existingIndex >= 0) {
-      updatedRules[existingIndex] = rule;
-    } else {
-      updatedRules.push(rule);
-    }
-    onSaveDataset({ ...dataset, hardExclusions: updatedRules });
+    const updatedRules = dataset.hardExclusions.filter((r) => !isPair(r.traitAId, r.traitBId));
+    updatedRules.push(rule);
+
+    onSaveDataset({
+      ...dataset,
+      updatedAt: Date.now(),
+      hardExclusions: updatedRules,
+    });
   };
 
   const handleDeleteRule = (type: 'cooccurrence' | 'soft' | 'hard', id: string) => {
     if (type === 'cooccurrence') {
       onSaveDataset({
         ...dataset,
+        updatedAt: Date.now(),
         cooccurrenceRules: dataset.cooccurrenceRules.filter((r) => r.id !== id),
       });
     } else if (type === 'soft') {
       onSaveDataset({
         ...dataset,
+        updatedAt: Date.now(),
         softExclusions: dataset.softExclusions.filter((r) => r.id !== id),
       });
     } else if (type === 'hard') {
       onSaveDataset({
         ...dataset,
+        updatedAt: Date.now(),
         hardExclusions: dataset.hardExclusions.filter((r) => r.id !== id),
       });
     }
@@ -125,6 +190,7 @@ export const BackendDashboard: React.FC<BackendDashboardProps> = ({ dataset, onS
       {activeTab === 'matrix' && (
         <MatrixHeatmap
           dataset={dataset}
+          onSaveCellRules={handleSaveCellRules}
           onUpdateCooccurrence={handleUpdateCooccurrence}
           onUpdateSoftExclusion={handleUpdateSoftExclusion}
           onUpdateHardExclusion={handleUpdateHardExclusion}

@@ -92,15 +92,14 @@ export interface SimulationResult {
   runTimeMs: number;
 }
 
-export interface RelationshipMetrics {
-  valence: number;       // -120 to 120
-  attachment: number;    // -120 to 120
-  competence: number;    // -120 to 120
-  admiration: number;    // -120 to 120
-  vulnerability: number; // -120 to 120
+export interface MetricDefinition {
+  id: string;
+  name: string; // Customizable metric name (e.g. 好感度, 信任度, 親密度)
+  min?: number; // default -120
+  max?: number; // default 120
 }
 
-export type MetricKey = keyof RelationshipMetrics;
+export type RelationshipMetrics = Record<string, number>; // key is metric id, value is -120 to 120
 
 export interface CharacterRelationship {
   id: string;
@@ -109,8 +108,8 @@ export interface CharacterRelationship {
   surfaceRelation: string;          // 表層關係 (e.g. "朋友")
   sourceToTargetThought: string;    // A對B的真實想法 (e.g. "不太熟的朋友的朋友")
   targetToSourceThought: string;    // B對A的真實想法 (e.g. "好朋友")
-  sourceToTargetMetrics: RelationshipMetrics; // A對B的5條數值
-  targetToSourceMetrics: RelationshipMetrics; // B對A的5條數值
+  sourceToTargetMetrics: RelationshipMetrics; // A對B的自訂數值指標
+  targetToSourceMetrics: RelationshipMetrics; // B對A的自訂數值指標
 }
 
 export interface NetworkCharacter {
@@ -130,6 +129,7 @@ export interface NetworkCharacter {
 export interface NetworkData {
   version: number;
   updatedAt: number;
+  metricDefinitions?: MetricDefinition[]; // Customizable metrics
   characters: NetworkCharacter[];
   relationships: CharacterRelationship[];
 }

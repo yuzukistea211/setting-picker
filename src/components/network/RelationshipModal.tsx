@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, Trash2, Check, ArrowRight } from 'lucide-react';
+import { X, Trash2, Check, ArrowRight, Plus, Sliders } from 'lucide-react';
 import {
   CharacterRelationship,
   NetworkCharacter,
   RelationshipMetrics,
+  MetricDefinition,
 } from '../../types';
 import { MetricBarSlider } from './MetricBarSlider';
 
@@ -11,42 +12,38 @@ interface RelationshipModalProps {
   isOpen: boolean;
   relationship: CharacterRelationship | null;
   characters: NetworkCharacter[];
+  metricDefinitions: MetricDefinition[];
   initialSourceId?: string;
   initialTargetId?: string;
   onSave: (rel: CharacterRelationship) => void;
   onDelete?: (relId: string) => void;
   onClose: () => void;
+  onUpdateMetricDefinitions?: (newDefs: MetricDefinition[]) => void;
+  onOpenMetricSettings?: () => void;
 }
-
-const DEFAULT_METRICS: RelationshipMetrics = {
-  valence: 0,
-  attachment: 0,
-  competence: 0,
-  admiration: 0,
-  vulnerability: 0,
-};
 
 export const RelationshipModal: React.FC<RelationshipModalProps> = ({
   isOpen,
   relationship,
   characters,
+  metricDefinitions,
   initialSourceId,
   initialTargetId,
   onSave,
   onDelete,
   onClose,
+  onUpdateMetricDefinitions,
+  onOpenMetricSettings,
 }) => {
   const [sourceId, setSourceId] = useState<string>('');
   const [targetId, setTargetId] = useState<string>('');
   const [surfaceRelation, setSurfaceRelation] = useState<string>('');
   const [sourceToTargetThought, setSourceToTargetThought] = useState<string>('');
   const [targetToSourceThought, setTargetToSourceThought] = useState<string>('');
-  const [sourceToTargetMetrics, setSourceToTargetMetrics] = useState<RelationshipMetrics>({
-    ...DEFAULT_METRICS,
-  });
-  const [targetToSourceMetrics, setTargetToSourceMetrics] = useState<RelationshipMetrics>({
-    ...DEFAULT_METRICS,
-  });
+  const [sourceToTargetMetrics, setSourceToTargetMetrics] = useState<RelationshipMetrics>({});
+  const [targetToSourceMetrics, setTargetToSourceMetrics] = useState<RelationshipMetrics>({});
+  const [isAddingMetricInline, setIsAddingMetricInline] = useState<boolean>(false);
+  const [inlineMetricName, setInlineMetricName] = useState<string>('');
 
   useEffect(() => {
     if (relationship) {
@@ -55,8 +52,8 @@ export const RelationshipModal: React.FC<RelationshipModalProps> = ({
       setSurfaceRelation(relationship.surfaceRelation || '');
       setSourceToTargetThought(relationship.sourceToTargetThought || '');
       setTargetToSourceThought(relationship.targetToSourceThought || '');
-      setSourceToTargetMetrics({ ...relationship.sourceToTargetMetrics });
-      setTargetToSourceMetrics({ ...relationship.targetToSourceMetrics });
+      setSourceToTargetMetrics({ ...(relationship.sourceToTargetMetrics || {}) });
+      setTargetToSourceMetrics({ ...(relationship.targetToSourceMetrics || {}) });
     } else {
       const firstChar = characters[0]?.id || '';
       const secondChar = characters[1]?.id || characters[0]?.id || '';
@@ -65,10 +62,15 @@ export const RelationshipModal: React.FC<RelationshipModalProps> = ({
       setSurfaceRelation('');
       setSourceToTargetThought('');
       setTargetToSourceThought('');
-      setSourceToTargetMetrics({ ...DEFAULT_METRICS });
-      setTargetToSourceMetrics({ ...DEFAULT_METRICS });
+      
+      const initialMetrics: RelationshipMetrics = {};
+      metricDefinitions.forEach((m) => {
+        initialMetrics[m.id] = 0;
+      });
+      setSourceToTargetMetrics({ ...initialMetrics });
+      setTargetToSourceMetrics({ ...initialMetrics });
     }
-  }, [relationship, isOpen, initialSourceId, initialTargetId, characters]);
+  }, [relationship, isOpen, initialSourceId, initialTargetId, characters, metricDefinitions]);
 
   if (!isOpen) return null;
 
@@ -80,20 +82,49 @@ export const RelationshipModal: React.FC<RelationshipModalProps> = ({
 
   const handleMetricChange = (
     direction: 'sourceToTarget' | 'targetToSource',
-    metricKey: keyof RelationshipMetrics,
+    metricId: string,
     val: number,
   ) => {
     if (direction === 'sourceToTarget') {
       setSourceToTargetMetrics((prev) => ({
         ...prev,
-        [metricKey]: val,
+        [metricId]: val,
       }));
     } else {
       setTargetToSourceMetrics((prev) => ({
         ...prev,
-        [metricKey]: val,
+        [metricId]: val,
       }));
     }
+  };
+
+  const handleRenameMetric = (metricId: string, newName: string) => {
+    if (!onUpdateMetricDefinitions) return;
+    const updated = metricDefinitions.map((m) =>
+      m.id === metricId ? { ...m, name: newName } : m,
+    );
+    onUpdateMetricDefinitions(updated);
+  };
+
+  const handleDeleteMetric = (metricId: string) => {
+    if (!onUpdateMetricDefinitions || metricDefinitions.length <= 1) return;
+    const updated = metricDefinitions.filter((m) => m.id !== metricId);
+    onUpdateMetricDefinitions(updated);
+  };
+
+  const handleCreateNewMetric = () => {
+    const trimmed = inlineMetricName.trim();
+    if (!trimmed || !onUpdateMetricDefinitions) return;
+    const newId = `metric-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const newMetric: MetricDefinition = {
+      id: newId,
+      name: trimmed,
+    };
+    onUpdateMetricDefinitions([...metricDefinitions, newMetric]);
+    setSourceToTargetMetrics((prev) => ({ ...prev, [newId]: 0 }));
+    setTargetToSourceMetrics((prev) => ({ ...prev, [newId]: 0 }));
+    setInlineMetricName('');
+    setIsAddingMetricInline(false);
   };
 
   const handleSave = () => {
@@ -140,7 +171,7 @@ export const RelationshipModal: React.FC<RelationshipModalProps> = ({
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
           {/* Character Selection (if creating new) */}
           {!relationship ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border border-black p-3 bg-neutral-50">
@@ -197,7 +228,75 @@ export const RelationshipModal: React.FC<RelationshipModalProps> = ({
             />
           </div>
 
-          {/* Directional Real Thoughts & 5 Metrics */}
+          {/* Metric Management Header Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-2 border border-black p-2 bg-neutral-50">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono font-bold">自訂數值指標 (-120 ~ +120)</span>
+              <span className="text-[11px] font-mono border border-black px-1.5 bg-white">
+                {metricDefinitions.length} 個維度
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {isAddingMetricInline ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="text"
+                    value={inlineMetricName}
+                    onChange={(e) => setInlineMetricName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleCreateNewMetric();
+                      } else if (e.key === 'Escape') {
+                        setIsAddingMetricInline(false);
+                      }
+                    }}
+                    placeholder="輸入新指標名稱"
+                    autoFocus
+                    className="border border-black px-2 py-0.5 text-xs bg-white font-bold w-36"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCreateNewMetric}
+                    disabled={!inlineMetricName.trim()}
+                    className="px-2 py-0.5 border border-black bg-black text-white text-xs font-bold hover:bg-neutral-800 disabled:opacity-30 cursor-pointer"
+                  >
+                    確定
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingMetricInline(false)}
+                    className="px-1.5 py-0.5 border border-black bg-white text-xs hover:bg-neutral-100 cursor-pointer"
+                  >
+                    取消
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsAddingMetricInline(true)}
+                  className="flex items-center gap-1 px-2.5 py-1 border border-black bg-white text-xs font-bold hover:bg-black hover:text-white cursor-pointer"
+                >
+                  <Plus size={12} />
+                  <span>新增指標</span>
+                </button>
+              )}
+
+              {onOpenMetricSettings && (
+                <button
+                  type="button"
+                  onClick={onOpenMetricSettings}
+                  className="flex items-center gap-1 px-2.5 py-1 border border-black bg-white text-xs font-bold hover:bg-black hover:text-white cursor-pointer"
+                >
+                  <Sliders size={12} />
+                  <span>管理指標名稱</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Directional Real Thoughts & Customizable Metrics */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Column 1: A -> B */}
             <div
@@ -225,36 +324,21 @@ export const RelationshipModal: React.FC<RelationshipModalProps> = ({
               </div>
 
               <div className="flex flex-col gap-2 pt-1">
-                <MetricBarSlider
-                  id="s-val"
-                  name="Valence"
-                  value={sourceToTargetMetrics.valence}
-                  onChange={(v) => handleMetricChange('sourceToTarget', 'valence', v)}
-                />
-                <MetricBarSlider
-                  id="s-att"
-                  name="Attachment"
-                  value={sourceToTargetMetrics.attachment}
-                  onChange={(v) => handleMetricChange('sourceToTarget', 'attachment', v)}
-                />
-                <MetricBarSlider
-                  id="s-cmp"
-                  name="Competence"
-                  value={sourceToTargetMetrics.competence}
-                  onChange={(v) => handleMetricChange('sourceToTarget', 'competence', v)}
-                />
-                <MetricBarSlider
-                  id="s-adm"
-                  name="Admiration"
-                  value={sourceToTargetMetrics.admiration}
-                  onChange={(v) => handleMetricChange('sourceToTarget', 'admiration', v)}
-                />
-                <MetricBarSlider
-                  id="s-vul"
-                  name="Vulnerability"
-                  value={sourceToTargetMetrics.vulnerability}
-                  onChange={(v) => handleMetricChange('sourceToTarget', 'vulnerability', v)}
-                />
+                {metricDefinitions.map((metric) => (
+                  <MetricBarSlider
+                    key={`s-${metric.id}`}
+                    id={`s-${metric.id}`}
+                    name={metric.name}
+                    value={sourceToTargetMetrics[metric.id] ?? 0}
+                    onChange={(v) => handleMetricChange('sourceToTarget', metric.id, v)}
+                    onRename={(newName) => handleRenameMetric(metric.id, newName)}
+                    onDelete={
+                      metricDefinitions.length > 1
+                        ? () => handleDeleteMetric(metric.id)
+                        : undefined
+                    }
+                  />
+                ))}
               </div>
             </div>
 
@@ -284,36 +368,21 @@ export const RelationshipModal: React.FC<RelationshipModalProps> = ({
               </div>
 
               <div className="flex flex-col gap-2 pt-1">
-                <MetricBarSlider
-                  id="t-val"
-                  name="Valence"
-                  value={targetToSourceMetrics.valence}
-                  onChange={(v) => handleMetricChange('targetToSource', 'valence', v)}
-                />
-                <MetricBarSlider
-                  id="t-att"
-                  name="Attachment"
-                  value={targetToSourceMetrics.attachment}
-                  onChange={(v) => handleMetricChange('targetToSource', 'attachment', v)}
-                />
-                <MetricBarSlider
-                  id="t-cmp"
-                  name="Competence"
-                  value={targetToSourceMetrics.competence}
-                  onChange={(v) => handleMetricChange('targetToSource', 'competence', v)}
-                />
-                <MetricBarSlider
-                  id="t-adm"
-                  name="Admiration"
-                  value={targetToSourceMetrics.admiration}
-                  onChange={(v) => handleMetricChange('targetToSource', 'admiration', v)}
-                />
-                <MetricBarSlider
-                  id="t-vul"
-                  name="Vulnerability"
-                  value={targetToSourceMetrics.vulnerability}
-                  onChange={(v) => handleMetricChange('targetToSource', 'vulnerability', v)}
-                />
+                {metricDefinitions.map((metric) => (
+                  <MetricBarSlider
+                    key={`t-${metric.id}`}
+                    id={`t-${metric.id}`}
+                    name={metric.name}
+                    value={targetToSourceMetrics[metric.id] ?? 0}
+                    onChange={(v) => handleMetricChange('targetToSource', metric.id, v)}
+                    onRename={(newName) => handleRenameMetric(metric.id, newName)}
+                    onDelete={
+                      metricDefinitions.length > 1
+                        ? () => handleDeleteMetric(metric.id)
+                        : undefined
+                    }
+                  />
+                ))}
               </div>
             </div>
           </div>
@@ -362,3 +431,4 @@ export const RelationshipModal: React.FC<RelationshipModalProps> = ({
     </div>
   );
 };
+

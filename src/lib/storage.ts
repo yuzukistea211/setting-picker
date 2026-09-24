@@ -1,4 +1,4 @@
-import { Dataset, NetworkData } from '../types';
+import { Dataset, NetworkData, MetricDefinition, CharacterRelationship } from '../types';
 import { DEFAULT_DATASET } from '../data/defaultTraits';
 
 const DB_NAME = 'oc_trait_generator_db';
@@ -11,9 +11,15 @@ const STORE_NAME_NETWORK = 'oc_networks';
 const KEY_NAME_NETWORK = 'current_network';
 const LOCAL_STORAGE_KEY_NETWORK = 'oc_relationship_network_backup';
 
+export const DEFAULT_METRIC_DEFINITIONS: MetricDefinition[] = [
+  { id: 'metric-1', name: '好感度' },
+  { id: 'metric-2', name: '信任度' }
+];
+
 export const DEFAULT_NETWORK_DATA: NetworkData = {
-  version: 1,
+  version: 2,
   updatedAt: Date.now(),
+  metricDefinitions: DEFAULT_METRIC_DEFINITIONS,
   characters: [
     {
       id: 'char-a',
@@ -39,22 +45,59 @@ export const DEFAULT_NETWORK_DATA: NetworkData = {
       sourceToTargetThought: '不太熟的朋友的朋友',
       targetToSourceThought: '好朋友',
       sourceToTargetMetrics: {
-        valence: 20,
-        attachment: -10,
-        competence: 50,
-        admiration: 30,
-        vulnerability: -20,
+        'metric-1': 20,
+        'metric-2': -10
       },
       targetToSourceMetrics: {
-        valence: 85,
-        attachment: 90,
-        competence: 65,
-        admiration: 75,
-        vulnerability: 40,
+        'metric-1': 85,
+        'metric-2': 90
       },
     },
   ],
 };
+
+export function migrateNetworkData(raw: any): NetworkData {
+  if (!raw) return DEFAULT_NETWORK_DATA;
+
+  let metricDefinitions: MetricDefinition[] = Array.isArray(raw.metricDefinitions) && raw.metricDefinitions.length > 0
+    ? raw.metricDefinitions
+    : DEFAULT_METRIC_DEFINITIONS;
+
+  // Legacy key mapper for removing Valence, Attachment, Competence, Admiration, Vulnerability
+  const legacyKeyMap: Record<string, string> = {
+    valence: 'metric-1',
+    attachment: 'metric-2'
+  };
+
+  const relationships: CharacterRelationship[] = (raw.relationships || []).map((rel: any) => {
+    const migrateMetrics = (m: Record<string, number> | undefined): Record<string, number> => {
+      const res: Record<string, number> = {};
+      if (!m) return res;
+      for (const [k, v] of Object.entries(m)) {
+        if (legacyKeyMap[k]) {
+          res[legacyKeyMap[k]] = v;
+        } else {
+          res[k] = v;
+        }
+      }
+      return res;
+    };
+
+    return {
+      ...rel,
+      sourceToTargetMetrics: migrateMetrics(rel.sourceToTargetMetrics),
+      targetToSourceMetrics: migrateMetrics(rel.targetToSourceMetrics),
+    };
+  });
+
+  return {
+    version: raw.version || 2,
+    updatedAt: raw.updatedAt || Date.now(),
+    metricDefinitions,
+    characters: raw.characters || [],
+    relationships,
+  };
+}
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -175,12 +218,14 @@ export async function loadNetworkData(): Promise<NetworkData> {
 
       req.onsuccess = () => {
         if (req.result) {
-          resolve(req.result as NetworkData);
+          const migrated = migrateNetworkData(req.result);
+          resolve(migrated);
         } else {
           const localData = loadNetworkFromLocalStorage();
           if (localData) {
-            saveNetworkData(localData).catch(console.error);
-            resolve(localData);
+            const migrated = migrateNetworkData(localData);
+            saveNetworkData(migrated).catch(console.error);
+            resolve(migrated);
           } else {
             saveNetworkData(DEFAULT_NETWORK_DATA).catch(console.error);
             resolve(DEFAULT_NETWORK_DATA);
@@ -189,13 +234,13 @@ export async function loadNetworkData(): Promise<NetworkData> {
       };
 
       req.onerror = () => {
-        const local = loadNetworkFromLocalStorage() || DEFAULT_NETWORK_DATA;
-        resolve(local);
+        const local = loadNetworkFromLocalStorage();
+        resolve(migrateNetworkData(local));
       };
     });
   } catch {
-    const local = loadNetworkFromLocalStorage() || DEFAULT_NETWORK_DATA;
-    return local;
+    const local = loadNetworkFromLocalStorage();
+    return migrateNetworkData(local);
   }
 }
 

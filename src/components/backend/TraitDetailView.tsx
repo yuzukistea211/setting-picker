@@ -332,7 +332,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
       id: `soft-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       traitAId: currentId,
       traitBId: newSoftTargetId,
-      penaltyMultiplier: Number(newSoftMultiplier),
+      penaltyMultiplier: Math.round(Number(newSoftMultiplier) * 100) / 100,
       note: newSoftNote.trim() || '弱相容情境說明',
     };
 
@@ -1335,7 +1335,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                                 max="0.95"
                                 value={rule.penaltyMultiplier}
                                 onChange={(e) => {
-                                  const val = Number(e.target.value);
+                                  const val = Math.round(Number(e.target.value) * 100) / 100;
                                   setSoftRules((prev) =>
                                     prev.map((r) =>
                                       r.id === rule.id ? { ...r, penaltyMultiplier: val } : r,
