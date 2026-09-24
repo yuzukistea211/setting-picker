@@ -135,8 +135,8 @@ export default function App() {
           id="dark-mode-invert-overlay"
           className="fixed inset-0 pointer-events-none z-[99999]"
           style={{
-            backdropFilter: 'invert(1)',
-            WebkitBackdropFilter: 'invert(1)',
+            backdropFilter: 'invert(0.98)',
+            WebkitBackdropFilter: 'invert(0.98)',
           }}
           aria-hidden="true"
         />

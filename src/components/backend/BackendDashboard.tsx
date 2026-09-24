@@ -148,7 +148,7 @@ export const BackendDashboard: React.FC<BackendDashboardProps> = ({ dataset, onS
   return (
     <div id="backend-dashboard" className="w-full flex flex-col gap-6">
       {/* Backend Module Tabs */}
-      <div className="flex flex-wrap border-2 border-black bg-white">
+      <div className="flex flex-wrap border-2 border-black bg-(--main-color)">
         <button
           id="tab-backend-matrix"
           type="button"
