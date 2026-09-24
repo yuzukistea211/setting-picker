@@ -98,7 +98,6 @@ export const MetricManagementModal: React.FC<MetricManagementModalProps> = ({
           <div className="flex items-center gap-2">
             <span className="font-mono text-xs px-2 py-0.5 border border-black bg-black text-white font-bold flex items-center gap-1">
               <Sliders size={12} />
-              <span>METRICS</span>
             </span>
             <h2 className="font-bold text-base tracking-tight">自訂數值指標名稱</h2>
           </div>
@@ -113,9 +112,6 @@ export const MetricManagementModal: React.FC<MetricManagementModalProps> = ({
 
         {/* Content */}
         <div className="p-4 flex-1 overflow-y-auto flex flex-col gap-4">
-          <p className="text-xs text-neutral-600">
-            自訂關係網中的數值維度名稱（範圍為 -120 到 +120）。您可以自由新增、重新命名、調整排序或移除指標。
-          </p>
 
           {/* Add New Metric */}
           <div className="flex items-center gap-2 border border-black p-2.5 bg-neutral-50">

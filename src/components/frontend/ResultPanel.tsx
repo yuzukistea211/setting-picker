@@ -235,14 +235,14 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
               type="button"
               onClick={() => setIsAddModalOpen(true)}
               className="border-2 border-dashed border-black/40 hover:border-black p-4 bg-neutral-50/40 hover:bg-neutral-50 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all min-h-[120px] group"
-              title="自由挑選詞條加入角色"
+              title="挑選詞條加入角色"
             >
               <div className="p-2 border border-black rounded-full bg-white group-hover:bg-black group-hover:text-white transition-colors">
                 <Plus size={16} />
               </div>
               <span className="text-xs font-black tracking-wide">+ 加入詞條</span>
               <span className="text-[11px] font-mono text-neutral-500">
-                點擊瀏覽詞庫自由擴充角色詞條
+                點擊瀏覽詞庫
               </span>
             </button>
           </div>

@@ -664,7 +664,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
               <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2">
                   <span className="border-2 border-black px-2 py-0.5 text-xs font-mono font-bold bg-neutral-100">
-                    軸線標籤：{selectedTrait.axis}
+                    {selectedTrait.axis}
                   </span>
                   <span className="text-xs font-mono border border-black px-2 py-0.5">
                     基準權重: {selectedTrait.baseWeight}
@@ -755,9 +755,6 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
               <div className="flex items-center justify-between border-b border-black pb-1.5">
                 <div className="flex items-center gap-1.5">
                   <ArrowUpRight size={15} className="text-emerald-700" />
-                  <span className="text-xs font-black tracking-wider uppercase">
-                    最容易一起出現 (正共現組合：{relationships.positiveRules.length})
-                  </span>
                 </div>
                 <button
                   type="button"
@@ -799,9 +796,6 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
               <div className="flex items-center justify-between border-b border-black pb-1.5">
                 <div className="flex items-center gap-1.5">
                   <ArrowDownRight size={15} className="text-rose-700" />
-                  <span className="text-xs font-black tracking-wider uppercase">
-                    排斥與互斥機制 (軟排除 / 硬排除 / 負共現)
-                  </span>
                 </div>
                 <button
                   type="button"
@@ -1243,7 +1237,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
             {editorTab === 'soft' && (
               <div className="flex flex-col gap-4 py-1">
                 <div className="border border-black p-2.5 bg-neutral-50 text-xs text-neutral-700">
-                  <span className="font-bold">說明：</span>軟排除代表「弱相容」性格特徵，設定較低的懲罰乘數（0.01~0.9）大幅壓低同時抽取機率，並附帶特殊性格張力之情境說明。
+                  <span className="font-bold">說明：</span>軟排除代表「弱相容」性格特徵，設定較低的懲罰乘數（0.01~0.9）大幅壓低同時抽取機率，並附帶特殊說明。
                 </div>
 
                 {/* Add Soft Exclusion Sub-form */}
@@ -1289,7 +1283,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                       required
                       value={newSoftNote}
                       onChange={(e) => setNewSoftNote(e.target.value)}
-                      placeholder="輸入弱相容情境說明 (例如：表面冷靜但內心矛盾衝突加劇)..."
+                      placeholder="輸入弱相容情境說明..."
                       className="border border-black p-1.5 text-xs flex-1 bg-white focus:outline-none"
                     />
                     <button
@@ -1413,7 +1407,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                       type="text"
                       value={newHardReason}
                       onChange={(e) => setNewHardReason(e.target.value)}
-                      placeholder="輸入互斥原因（選填，例如：根本世界觀矛盾、情緒反應衝突）..."
+                      placeholder="輸入互斥原因（選填）..."
                       className="border border-black p-1.5 text-xs flex-1 bg-white focus:outline-none"
                     />
                     <button

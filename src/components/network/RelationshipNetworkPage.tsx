@@ -676,7 +676,7 @@ export const RelationshipNetworkPage: React.FC = () => {
 
                   <div className="flex flex-col gap-1">
                     <label htmlFor="input-character-notes" className="text-xs font-mono font-bold">
-                      角色簡述 / 備註
+                      角色備註
                     </label>
                     <textarea
                       id="input-character-notes"

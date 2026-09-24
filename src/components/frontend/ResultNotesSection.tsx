@@ -39,7 +39,7 @@ export const ResultNotesSection: React.FC<ResultNotesSectionProps> = ({
             type="text"
             value={characterName}
             onChange={(e) => onUpdateNotes(e.target.value, notes)}
-            placeholder="輸入自訂角色姓名或稱呼（例如：雷恩·黑爾、莉莉絲、研究員 A）"
+            placeholder="輸入角色姓名或稱呼"
             className="flex-1 text-xs border border-black px-3 py-1.5 focus:bg-neutral-50 focus:outline-none placeholder:text-neutral-400 font-sans"
           />
         </div>
@@ -52,7 +52,7 @@ export const ResultNotesSection: React.FC<ResultNotesSectionProps> = ({
               className="text-xs font-bold flex items-center gap-1"
             >
               <FileText size={13} />
-              <span>自訂備註 ：</span>
+              <span>備註 ：</span>
             </label>
             <span className="text-[10px] font-mono text-neutral-400">
               {notes.length} 字
@@ -63,7 +63,7 @@ export const ResultNotesSection: React.FC<ResultNotesSectionProps> = ({
             rows={4}
             value={notes}
             onChange={(e) => onUpdateNotes(characterName, e.target.value)}
-            placeholder="在此直接輸入自訂備註、背景故事設定、情節構思，或針對上方詞條強度的補充描寫..."
+            placeholder="在此直接輸入..."
             className="w-full text-xs font-sans border border-black p-3 focus:bg-neutral-50 focus:outline-none resize-y leading-relaxed placeholder:text-neutral-400"
           />
         </div>

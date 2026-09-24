@@ -141,7 +141,7 @@ export const ExtractorPanel: React.FC<ExtractorPanelProps> = ({
             onChange={(e) => onSelectPinnedTrait(e.target.value)}
             className="w-full border border-black bg-white p-2 text-xs font-medium text-black focus:outline-none cursor-pointer"
           >
-            <option value="">-- 不指定（隨機核心） --</option>
+            <option value="">-- 不指定 --</option>
             {axes.map((axis) => {
               const axisTraits = traits.filter((t) => t.axis === axis.name);
               if (axisTraits.length === 0) return null;

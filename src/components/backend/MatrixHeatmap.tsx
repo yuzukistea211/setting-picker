@@ -132,7 +132,7 @@ const CellEditorDrawer: React.FC<CellEditorDrawerProps> = React.memo(({
                 type="text"
                 value={hardReason}
                 onChange={(e) => setHardReason(e.target.value)}
-                placeholder="輸入邏輯矛盾理由（如：性格完全互斥）"
+                placeholder="輸入邏輯矛盾理由"
                 className="border border-black p-1.5 text-xs bg-white focus:outline-none"
               />
             </div>

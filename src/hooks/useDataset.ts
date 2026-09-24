@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Dataset } from '../types';
 import { DEFAULT_DATASET } from '../data/defaultTraits';
 import { loadDataset, resetToDefaultDataset, saveDataset as persistDataset } from '../lib/storage';
+import { executeMerge, MergeOptions, MergeSummary } from '../lib/datasetMerge';
 
 export function useDataset() {
   const [dataset, setDataset] = useState<Dataset>(DEFAULT_DATASET);
@@ -30,6 +31,18 @@ export function useDataset() {
     await handleSaveDataset(imported);
   }, [handleSaveDataset]);
 
+  const handleMergeDataset = useCallback(
+    async (
+      incomingRaw: any,
+      options: MergeOptions = { duplicateStrategy: 'update', mergeRules: true }
+    ): Promise<MergeSummary> => {
+      const { mergedDataset, summary } = executeMerge(dataset, incomingRaw, options);
+      await handleSaveDataset(mergedDataset);
+      return summary;
+    },
+    [dataset, handleSaveDataset]
+  );
+
   const handleResetDataset = useCallback(async () => {
     const defaultData = await resetToDefaultDataset();
     setDataset(defaultData);
@@ -42,6 +55,7 @@ export function useDataset() {
     isLoadingDB,
     saveDataset: handleSaveDataset,
     importDataset: handleImportDataset,
+    mergeDataset: handleMergeDataset,
     resetDataset: handleResetDataset,
   };
 }

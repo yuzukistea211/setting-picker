@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Download, Upload, RotateCcw, Sliders, Dices, Network, Rat, Moon, Sun } from 'lucide-react';
+import { Download, Upload, RotateCcw, Sliders, Dices, Network, Rat, Moon, Sun, GitMerge } from 'lucide-react';
 import { Dataset } from '../types';
 
 interface NavbarProps {
@@ -7,6 +7,7 @@ interface NavbarProps {
   onTabChange: (tab: 'frontend' | 'backend' | 'network') => void;
   dataset: Dataset;
   onImportDataset: (dataset: Dataset) => void;
+  onOpenMergeModal: (rawJson: any, fileName: string) => void;
   onResetDataset: () => void;
   isDarkMode: boolean;
   onToggleDarkMode: () => void;
@@ -17,11 +18,13 @@ export const Navbar: React.FC<NavbarProps> = ({
   onTabChange,
   dataset,
   onImportDataset,
+  onOpenMergeModal,
   onResetDataset,
   isDarkMode,
   onToggleDarkMode,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mergeInputRef = useRef<HTMLInputElement>(null);
 
   const handleExport = () => {
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(dataset, null, 2));
@@ -41,11 +44,34 @@ export const Navbar: React.FC<NavbarProps> = ({
     reader.onload = (event) => {
       try {
         const parsed = JSON.parse(event.target?.result as string);
-        if (parsed && Array.isArray(parsed.traits) && Array.isArray(parsed.axes)) {
+        if (parsed && (Array.isArray(parsed.traits) || Array.isArray(parsed))) {
           onImportDataset(parsed);
+        } else {
+          alert('匯入失敗：檔案缺少詞條資料。');
         }
       } catch (err) {
         console.error('Invalid JSON file', err);
+        alert('匯入失敗：非有效 JSON 格式。');
+      }
+    };
+    reader.readAsText(file);
+    if (e.target) {
+      e.target.value = '';
+    }
+  };
+
+  const handleMergeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result as string);
+        onOpenMergeModal(parsed, file.name);
+      } catch (err) {
+        console.error('Invalid JSON file for merge', err);
+        alert('檔案讀取失敗：非有效 JSON 格式檔案。');
       }
     };
     reader.readAsText(file);
@@ -112,7 +138,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <input
             ref={fileInputRef}
             type="file"
@@ -125,15 +151,36 @@ export const Navbar: React.FC<NavbarProps> = ({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             className="flex items-center gap-1 px-3 py-1.5 border border-black text-xs font-bold hover:bg-black hover:text-white transition-colors cursor-pointer"
+            title="完全覆蓋並取代現有詞庫"
           >
             <Upload size={14} />
             <span>匯入詞庫</span>
           </button>
+
+          <input
+            ref={mergeInputRef}
+            type="file"
+            accept=".json"
+            className="hidden"
+            onChange={handleMergeFileChange}
+          />
+          <button
+            id="btn-merge-json"
+            type="button"
+            onClick={() => mergeInputRef.current?.click()}
+            className="flex items-center gap-1 px-3 py-1.5 border border-black text-xs font-bold hover:bg-black hover:text-white transition-colors cursor-pointer"
+            title="將新詞庫檔案合併到目前的詞庫中"
+          >
+            <GitMerge size={14} />
+            <span>合併詞庫</span>
+          </button>
+
           <button
             id="btn-export-json"
             type="button"
             onClick={handleExport}
             className="flex items-center gap-1 px-3 py-1.5 border border-black text-xs font-bold hover:bg-black hover:text-white transition-colors cursor-pointer"
+            title="匯出詞庫 JSON（資料儲存於瀏覽器 IndexedDB，清理快取時可能遺失，請定期匯出儲存為本地檔案）"
           >
             <Download size={14} />
             <span>匯出詞庫</span>
