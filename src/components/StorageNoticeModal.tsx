@@ -52,7 +52,7 @@ export const StorageNoticeModal: React.FC<StorageNoticeModalProps> = ({ isOpen, 
             本工具所有設定與詞庫資料皆存放於瀏覽器的 <span className="underline decoration-2">IndexedDB</span>。
           </p>
           <p className="text-neutral-700">
-            清理瀏覽器資料、使用無痕模式或更換裝置時，資料可能會被清除。建議定期點擊頂部的「<span className="font-bold text-black">匯出詞庫</span>」將資料另存為本機檔案備份。
+            清理瀏覽器資料、使用無痕模式或更換裝置時，資料可能會被清除。建議定期匯出資料另存為本機檔案備份喔。
           </p>
         </div>
 
