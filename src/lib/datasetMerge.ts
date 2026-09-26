@@ -409,7 +409,7 @@ export function executeMerge(
           id: `hard-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           traitAId: mappedA,
           traitBId: mappedB,
-          reason: reason || '性格設定邏輯互斥',
+          reason: reason || '設定邏輯互斥',
         };
         hardMap.set(key, newRule);
         addedHardRulesCount++;

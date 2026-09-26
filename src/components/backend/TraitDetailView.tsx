@@ -15,8 +15,10 @@ import {
   Sliders,
   X,
   ArrowLeft,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
-import { CooccurrenceRule, Dataset, HardExclusionRule, IntensityLevel, SoftExclusionRule, Trait } from '../../types';
+import { ALL_INTENSITIES, CooccurrenceRule, Dataset, HardExclusionRule, IntensityLevel, SoftExclusionRule, Trait } from '../../types';
 import { INTENSITY_DISTRIBUTION } from '../../lib/generator';
 import { AxisManagementModal } from './AxisManagementModal';
 
@@ -59,6 +61,27 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
   // Sub-form states for adding new rules
   const [newCoTargetId, setNewCoTargetId] = useState<string>('');
   const [newCoWeight, setNewCoWeight] = useState<number>(5);
+  const [newCoModifiers, setNewCoModifiers] = useState<Record<IntensityLevel, number>>({
+    '隱藏': 0,
+    '輕微': 0,
+    '中等': 0,
+    '強烈': 0,
+    '極端': 0,
+  });
+  const [showNewCoModifiers, setShowNewCoModifiers] = useState<boolean>(false);
+  const [expandedCoRuleIds, setExpandedCoRuleIds] = useState<Set<string>>(new Set());
+
+  const toggleExpandCoRule = (id: string) => {
+    setExpandedCoRuleIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   const [newSoftTargetId, setNewSoftTargetId] = useState<string>('');
   const [newSoftMultiplier, setNewSoftMultiplier] = useState<number>(0.1);
@@ -216,8 +239,11 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
     }[] = [];
 
     dataset.cooccurrenceRules.forEach((c) => {
-      if (c.traitAId === selectedTrait.id && c.intensityModifiers) {
-        const other = traitMap.get(c.traitBId);
+      const isA = c.traitAId === selectedTrait.id;
+      const isB = c.traitBId === selectedTrait.id;
+      if ((isA || isB) && c.intensityModifiers) {
+        const otherId = isA ? c.traitBId : c.traitAId;
+        const other = traitMap.get(otherId);
         if (other) {
           const mods = c.intensityModifiers;
           (Object.keys(mods) as IntensityLevel[]).forEach((lvl) => {
@@ -290,6 +316,15 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
         ),
       );
     }
+    setNewCoModifiers({
+      '隱藏': 0,
+      '輕微': 0,
+      '中等': 0,
+      '強烈': 0,
+      '極端': 0,
+    });
+    setShowNewCoModifiers(false);
+    setExpandedCoRuleIds(new Set());
     setErrorMsg('');
     setSaveNotification('已重設為當前設定');
   };
@@ -305,15 +340,27 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
     }
 
     const currentId = panelMode === 'add' ? 'temp-current' : selectedTrait?.id || 'temp-current';
+    const hasModifiers = Object.values(newCoModifiers).some((v) => typeof v === 'number' && v !== 0);
+
     const newRule: CooccurrenceRule = {
       id: `co-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       traitAId: currentId,
       traitBId: newCoTargetId,
       weight: Number(newCoWeight),
+      ...(hasModifiers ? { intensityModifiers: { ...newCoModifiers } } : {}),
     };
 
     setCoRules((prev) => [...prev, newRule]);
     setNewCoTargetId('');
+    setNewCoWeight(5);
+    setNewCoModifiers({
+      '隱藏': 0,
+      '輕微': 0,
+      '中等': 0,
+      '強烈': 0,
+      '極端': 0,
+    });
+    setShowNewCoModifiers(false);
     setErrorMsg('');
   };
 
@@ -357,7 +404,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
       id: `hard-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       traitAId: currentId,
       traitBId: newHardTargetId,
-      reason: newHardReason.trim() || '性格設定邏輯互斥',
+      reason: newHardReason.trim() || '設定邏輯互斥',
     };
 
     setHardRules((prev) => [...prev, newRule]);
@@ -699,29 +746,6 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
               </p>
             </div>
 
-            {/* 5 Intensity Distribution & Modifiers */}
-            <div className="border border-black p-3.5 flex flex-col gap-3">
-              <div className="flex items-center justify-between border-b border-black pb-1.5">
-                <div className="flex items-center gap-1.5">
-                  <Layers size={14} />
-                  <span className="text-xs font-black tracking-wider uppercase">
-                    性格強度前綴分佈 (常態分佈基準)
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-5 border border-black text-center text-xs">
-                {INTENSITY_DISTRIBUTION.map((item) => (
-                  <div
-                    key={item.level}
-                    className="border-r last:border-r-0 border-black p-1.5 flex flex-col gap-1 bg-neutral-50"
-                  >
-                    <span className="font-bold">{item.level}</span>
-                    <span className="font-mono text-[11px]">{(item.prob * 100).toFixed(0)}%</span>
-                  </div>
-                ))}
-              </div>
-
               {/* Intensity impacts on other traits */}
               {relationships.intensityImpacts.length > 0 ? (
                 <div className="flex flex-col gap-1.5 mt-1 border-t border-black pt-2">
@@ -1005,7 +1029,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                   editorTab === 'intensity' ? 'bg-white text-black' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
                 }`}
               >
-                性格強度基準
+                詞條強度基準
               </button>
             </div>
 
@@ -1123,50 +1147,102 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
             {editorTab === 'cooccur' && (
               <div className="flex flex-col gap-4 py-1">
                 <div className="border border-black p-2.5 bg-neutral-50 text-xs text-neutral-700">
-                  <span className="font-bold">說明：</span>共現權重決定抽取時兩詞條互相吸引或排斥的傾向。正權重 (+1~+10) 提高連帶被抽取的機率；負權重 (-1~-10) 降低同出機率。
+                  <span className="font-bold">說明：</span>共現權重決定抽取時兩詞條互相吸引或排斥的傾向。正權重 (+1~+10) 提高連帶被抽取的機率；負權重 (-1~-10) 降低同出機率。強度修正是在原有的共現權重基礎加上強度修正值。
                 </div>
 
                 {/* Add Co-occurrence Rule Sub-form */}
                 <form
                   onSubmit={handleAddCoRule}
-                  className="border-2 border-black p-3 bg-neutral-100 flex flex-wrap items-end gap-2 text-xs"
+                  className="border-2 border-black p-3 bg-neutral-100 flex flex-col gap-2.5 text-xs"
                 >
-                  <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
-                    <label className="text-[10px] font-bold">關聯目標詞條</label>
-                    <select
-                      required
-                      value={newCoTargetId}
-                      onChange={(e) => setNewCoTargetId(e.target.value)}
-                      className="border border-black bg-white p-1.5 text-xs focus:outline-none cursor-pointer"
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
+                      <label className="text-[10px] font-bold">關聯目標詞條</label>
+                      <select
+                        required
+                        value={newCoTargetId}
+                        onChange={(e) => setNewCoTargetId(e.target.value)}
+                        className="border border-black bg-white p-1.5 text-xs focus:outline-none cursor-pointer"
+                      >
+                        <option value="">選擇要關聯的詞條...</option>
+                        {availableOtherTraits.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} [{t.axis}]
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1 w-28">
+                      <label className="text-[10px] font-bold">共現權重 (-10 ~ +10)</label>
+                      <input
+                        type="number"
+                        min="-10"
+                        max="10"
+                        value={newCoWeight}
+                        onChange={(e) => setNewCoWeight(Number(e.target.value))}
+                        className="border border-black p-1.5 text-xs text-center font-mono font-bold bg-white focus:outline-none"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowNewCoModifiers(!showNewCoModifiers)}
+                      className={`flex items-center gap-1 px-2.5 py-1.5 border border-black text-xs font-bold cursor-pointer transition-colors ${
+                        showNewCoModifiers ? 'bg-black text-white' : 'bg-white hover:bg-neutral-50'
+                      }`}
+                      title="設定各詞條強度共現修正"
                     >
-                      <option value="">選擇要關聯的詞條...</option>
-                      {availableOtherTraits.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name} [{t.axis}]
-                        </option>
-                      ))}
-                    </select>
+                      <Sliders size={13} />
+                      <span>強度選項</span>
+                      {showNewCoModifiers ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    </button>
+
+                    <button
+                      type="submit"
+                      className="flex items-center gap-1 px-3 py-2 border-2 border-black bg-black text-white hover:bg-neutral-800 text-xs font-bold cursor-pointer transition-colors"
+                    >
+                      <Plus size={13} />
+                      <span>加入共現</span>
+                    </button>
                   </div>
 
-                  <div className="flex flex-col gap-1 w-28">
-                    <label className="text-[10px] font-bold">共現權重 (-10 ~ +10)</label>
-                    <input
-                      type="number"
-                      min="-10"
-                      max="10"
-                      value={newCoWeight}
-                      onChange={(e) => setNewCoWeight(Number(e.target.value))}
-                      className="border border-black p-1.5 text-xs text-center font-mono font-bold bg-white focus:outline-none"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="flex items-center gap-1 px-3 py-2 border-2 border-black bg-black text-white hover:bg-neutral-800 text-xs font-bold cursor-pointer transition-colors"
-                  >
-                    <Plus size={13} />
-                    <span>加入共現</span>
-                  </button>
+                  {/* Intensity options for new rule */}
+                  {showNewCoModifiers && (
+                    <div className="border border-black p-2 bg-white flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-bold">詞條強度共現修正</span>
+                        <span className="text-[10px] text-neutral-500 font-mono">（各強度加成 -10 ~ +10）</span>
+                      </div>
+                      <div className="grid grid-cols-5 gap-1.5">
+                        {ALL_INTENSITIES.map((lvl) => {
+                          const modVal = newCoModifiers[lvl] || 0;
+                          return (
+                            <div key={lvl} className="border border-black p-1 bg-neutral-50 flex flex-col items-center gap-0.5">
+                              <span className="text-[10px] font-bold text-neutral-700">{lvl}</span>
+                              <input
+                                type="number"
+                                min="-10"
+                                max="10"
+                                value={modVal}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value, 10);
+                                  const cleanVal = isNaN(val) ? 0 : Math.max(-10, Math.min(10, val));
+                                  setNewCoModifiers((prev) => ({
+                                    ...prev,
+                                    [lvl]: cleanVal,
+                                  }));
+                                }}
+                                className={`w-full text-center text-xs font-mono font-bold border border-black/30 focus:border-black p-0.5 bg-white ${
+                                  modVal > 0 ? 'text-emerald-700' : modVal < 0 ? 'text-rose-700' : 'text-neutral-800'
+                                }`}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </form>
 
                 {/* List of Co-occurrence Rules */}
@@ -1181,50 +1257,125 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                       const targetId = rule.traitAId === currentId ? rule.traitBId : rule.traitAId;
                       const other = getRuleOtherTrait(targetId);
                       const isPositive = rule.weight >= 0;
+                      const isExpanded = expandedCoRuleIds.has(rule.id);
+                      const hasModifiers =
+                        rule.intensityModifiers &&
+                        Object.values(rule.intensityModifiers).some((v) => typeof v === 'number' && v !== 0);
 
                       return (
                         <div
                           key={rule.id}
-                          className="p-2.5 flex items-center justify-between bg-white hover:bg-neutral-50 gap-2"
+                          className="flex flex-col bg-white hover:bg-neutral-50 transition-colors"
                         >
-                          <div className="flex items-center gap-2">
-                            {isPositive ? (
-                              <ArrowUpRight size={15} className="text-emerald-700 shrink-0" />
-                            ) : (
-                              <ArrowDownRight size={15} className="text-rose-700 shrink-0" />
-                            )}
-                            <div className="flex flex-col">
-                              <span className="font-bold">{other.name}</span>
-                              <span className="text-[10px] text-neutral-500 font-mono">軸線：{other.axis}</span>
+                          <div className="p-2.5 flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              {isPositive ? (
+                                <ArrowUpRight size={15} className="text-emerald-700 shrink-0" />
+                              ) : (
+                                <ArrowDownRight size={15} className="text-rose-700 shrink-0" />
+                              )}
+                              <div className="flex flex-col">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-bold">{other.name}</span>
+                                  {hasModifiers && (
+                                    <span className="text-[10px] font-mono border border-black px-1 bg-amber-50 text-amber-900 font-bold">
+                                      含強度修正
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[10px] text-neutral-500 font-mono">軸線：{other.axis}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] font-mono">權重:</span>
+                              <input
+                                type="number"
+                                min="-10"
+                                max="10"
+                                value={rule.weight}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value);
+                                  setCoRules((prev) =>
+                                    prev.map((r) => (r.id === rule.id ? { ...r, weight: val } : r)),
+                                  );
+                                }}
+                                className={`border border-black px-1.5 py-0.5 text-xs w-14 text-center font-mono font-bold ${
+                                  isPositive ? 'text-emerald-800' : 'text-rose-800'
+                                }`}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => toggleExpandCoRule(rule.id)}
+                                className={`border border-black px-2 py-1 text-[11px] font-bold cursor-pointer transition-colors flex items-center gap-0.5 ${
+                                  isExpanded ? 'bg-black text-white' : 'bg-white hover:bg-neutral-100'
+                                }`}
+                                title="設定各強度選項加成"
+                              >
+                                <Sliders size={11} />
+                                <span>強度</span>
+                                {isExpanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setCoRules((prev) => prev.filter((r) => r.id !== rule.id))}
+                                className="border border-black p-1 hover:bg-black hover:text-white cursor-pointer transition-colors"
+                                title="刪除"
+                              >
+                                <Trash2 size={12} />
+                              </button>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-mono">權重:</span>
-                            <input
-                              type="number"
-                              min="-10"
-                              max="10"
-                              value={rule.weight}
-                              onChange={(e) => {
-                                const val = Number(e.target.value);
-                                setCoRules((prev) =>
-                                  prev.map((r) => (r.id === rule.id ? { ...r, weight: val } : r)),
-                                );
-                              }}
-                              className={`border border-black px-1.5 py-0.5 text-xs w-16 text-center font-mono font-bold ${
-                                isPositive ? 'text-emerald-800' : 'text-rose-800'
-                              }`}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setCoRules((prev) => prev.filter((r) => r.id !== rule.id))}
-                              className="border border-black p-1 hover:bg-black hover:text-white cursor-pointer transition-colors"
-                              title="刪除"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
+                          {/* Expanded Intensity Modifiers */}
+                          {isExpanded && (
+                            <div className="px-3 pb-2.5 pt-1 border-t border-black/10 bg-neutral-50 flex flex-col gap-1.5">
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className="font-bold">各詞條強度共現修正</span>
+                                <span className="text-[10px] text-neutral-500 font-mono">（權重加成 -10 ~ +10）</span>
+                              </div>
+                              <div className="grid grid-cols-5 gap-1.5">
+                                {ALL_INTENSITIES.map((lvl) => {
+                                  const modVal = rule.intensityModifiers?.[lvl] || 0;
+                                  return (
+                                    <div key={lvl} className="border border-black p-1 bg-white flex flex-col items-center gap-0.5">
+                                      <span className="text-[10px] font-bold text-neutral-700">{lvl}</span>
+                                      <input
+                                        type="number"
+                                        min="-10"
+                                        max="10"
+                                        value={modVal}
+                                        onChange={(e) => {
+                                          const val = parseInt(e.target.value, 10);
+                                          const cleanVal = isNaN(val) ? 0 : Math.max(-10, Math.min(10, val));
+                                          setCoRules((prev) =>
+                                            prev.map((r) => {
+                                              if (r.id !== rule.id) return r;
+                                              const prevMods = r.intensityModifiers || {};
+                                              return {
+                                                ...r,
+                                                intensityModifiers: {
+                                                  ...prevMods,
+                                                  [lvl]: cleanVal,
+                                                },
+                                              };
+                                            }),
+                                          );
+                                        }}
+                                        className={`w-full text-center text-xs font-mono font-bold border border-black/30 focus:border-black p-0.5 ${
+                                          modVal > 0
+                                            ? 'text-emerald-700 bg-emerald-50/50'
+                                            : modVal < 0
+                                            ? 'text-rose-700 bg-rose-50/50'
+                                            : 'text-neutral-800'
+                                        }`}
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Filter, SlidersHorizontal, X, RotateCcw } from 'lucide-react';
-import { CooccurrenceRule, Dataset, HardExclusionRule, SoftExclusionRule, Trait } from '../../types';
+import { ALL_INTENSITIES, CooccurrenceRule, Dataset, HardExclusionRule, IntensityLevel, SoftExclusionRule, Trait } from '../../types';
 import { getDatasetIndex } from '../../lib/generator';
 
 interface MatrixHeatmapProps {
@@ -14,6 +14,7 @@ interface MatrixHeatmapProps {
     softPenalty: number;
     softNote: string;
     coocWeight: number;
+    coocModifiers?: { [key in IntensityLevel]?: number };
   }) => void;
   onUpdateCooccurrence: (rule: CooccurrenceRule) => void;
   onUpdateSoftExclusion: (rule: SoftExclusionRule) => void;
@@ -36,6 +37,7 @@ interface CellEditorDrawerProps {
     softPenalty: number;
     softNote: string;
     coocWeight: number;
+    coocModifiers?: { [key in IntensityLevel]?: number };
   }) => void;
 }
 
@@ -54,6 +56,13 @@ const CellEditorDrawer: React.FC<CellEditorDrawerProps> = React.memo(({
   const [softPenalty, setSoftPenalty] = useState<number>(initialSoft?.penaltyMultiplier ?? 0.2);
   const [softNote, setSoftNote] = useState<string>(initialSoft?.note || '');
   const [editCoocWeight, setEditCoocWeight] = useState<number>(initialCooc?.weight ?? 0);
+  const [intensityModifiers, setIntensityModifiers] = useState<Record<IntensityLevel, number>>(() => ({
+    '隱藏': initialCooc?.intensityModifiers?.['隱藏'] ?? 0,
+    '輕微': initialCooc?.intensityModifiers?.['輕微'] ?? 0,
+    '中等': initialCooc?.intensityModifiers?.['中等'] ?? 0,
+    '強烈': initialCooc?.intensityModifiers?.['強烈'] ?? 0,
+    '極端': initialCooc?.intensityModifiers?.['極端'] ?? 0,
+  }));
 
   // Synchronize internal state whenever selected cell or props change
   useEffect(() => {
@@ -63,6 +72,13 @@ const CellEditorDrawer: React.FC<CellEditorDrawerProps> = React.memo(({
     setSoftPenalty(initialSoft?.penaltyMultiplier ?? 0.2);
     setSoftNote(initialSoft?.note || '');
     setEditCoocWeight(initialCooc?.weight ?? 0);
+    setIntensityModifiers({
+      '隱藏': initialCooc?.intensityModifiers?.['隱藏'] ?? 0,
+      '輕微': initialCooc?.intensityModifiers?.['輕微'] ?? 0,
+      '中等': initialCooc?.intensityModifiers?.['中等'] ?? 0,
+      '強烈': initialCooc?.intensityModifiers?.['強烈'] ?? 0,
+      '極端': initialCooc?.intensityModifiers?.['極端'] ?? 0,
+    });
   }, [traitA.id, traitB.id, initialHard, initialSoft, initialCooc]);
 
   const handleSave = () => {
@@ -73,6 +89,7 @@ const CellEditorDrawer: React.FC<CellEditorDrawerProps> = React.memo(({
       softPenalty,
       softNote,
       coocWeight: editCoocWeight,
+      coocModifiers: intensityModifiers,
     });
   };
 
@@ -83,6 +100,13 @@ const CellEditorDrawer: React.FC<CellEditorDrawerProps> = React.memo(({
     setSoftPenalty(0.2);
     setSoftNote('');
     setEditCoocWeight(0);
+    setIntensityModifiers({
+      '隱藏': 0,
+      '輕微': 0,
+      '中等': 0,
+      '強烈': 0,
+      '極端': 0,
+    });
   };
 
   return (
@@ -217,6 +241,45 @@ const CellEditorDrawer: React.FC<CellEditorDrawerProps> = React.memo(({
             <span>中立 (0)</span>
             <span>強正共生 (+10)</span>
           </div>
+
+          {/* Intensity-Specific Co-occurrence Modifiers */}
+          <div className="border-t border-black/20 pt-2 flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold">詞條強度共現修正</span>
+              <span className="text-[10px] text-neutral-500 font-mono">（各強度加成 -10 ~ +10）</span>
+            </div>
+            <div className="grid grid-cols-5 gap-1">
+              {ALL_INTENSITIES.map((lvl) => {
+                const modVal = intensityModifiers[lvl] || 0;
+                return (
+                  <div key={lvl} className="border border-black p-1 bg-white flex flex-col items-center gap-0.5">
+                    <span className="text-[10px] font-bold text-neutral-700">{lvl}</span>
+                    <input
+                      type="number"
+                      min="-10"
+                      max="10"
+                      value={modVal}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        const cleanVal = isNaN(val) ? 0 : Math.max(-10, Math.min(10, val));
+                        setIntensityModifiers((prev) => ({
+                          ...prev,
+                          [lvl]: cleanVal,
+                        }));
+                      }}
+                      className={`w-full text-center text-xs font-mono font-bold border border-black/30 focus:border-black p-0.5 ${
+                        modVal > 0
+                          ? 'text-emerald-700 bg-emerald-50/50'
+                          : modVal < 0
+                          ? 'text-rose-700 bg-rose-50/50'
+                          : 'text-neutral-800'
+                      }`}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -304,6 +367,7 @@ export const MatrixHeatmap: React.FC<MatrixHeatmapProps> = ({
       softPenalty: number;
       softNote: string;
       coocWeight: number;
+      coocModifiers?: { [key in IntensityLevel]?: number };
     }) => {
       if (!activeCell) return;
       const { traitA, traitB } = activeCell;
@@ -316,7 +380,7 @@ export const MatrixHeatmap: React.FC<MatrixHeatmapProps> = ({
           ...params,
         });
       } else {
-        const { isHard, hardReason, isSoft, softPenalty, softNote, coocWeight } = params;
+        const { isHard, hardReason, isSoft, softPenalty, softNote, coocWeight, coocModifiers } = params;
         const key = `${traitA.id}:${traitB.id}`;
 
         // Hard Exclusion
@@ -348,13 +412,16 @@ export const MatrixHeatmap: React.FC<MatrixHeatmapProps> = ({
 
         // Co-occurrence
         const existingCooc = matrixData.coocMap.get(key);
-        if (coocWeight !== 0) {
+        const hasModifiers =
+          coocModifiers && Object.values(coocModifiers).some((v) => typeof v === 'number' && v !== 0);
+
+        if (coocWeight !== 0 || hasModifiers) {
           onUpdateCooccurrence({
             id: existingCooc?.id || `co-${Date.now()}`,
             traitAId: traitA.id,
             traitBId: traitB.id,
             weight: Number(coocWeight),
-            intensityModifiers: existingCooc?.intensityModifiers || {},
+            ...(hasModifiers ? { intensityModifiers: coocModifiers } : {}),
           });
         } else if (existingCooc) {
           onDeleteRule('cooccurrence', existingCooc.id);

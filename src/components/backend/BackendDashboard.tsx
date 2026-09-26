@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Grid, FileText, BarChart3 } from 'lucide-react';
-import { CooccurrenceRule, Dataset, HardExclusionRule, SoftExclusionRule } from '../../types';
+import { CooccurrenceRule, Dataset, HardExclusionRule, IntensityLevel, SoftExclusionRule } from '../../types';
 import { MatrixHeatmap } from './MatrixHeatmap';
 import { TraitDetailView } from './TraitDetailView';
 import { SimulationAuditView } from './SimulationAuditView';
@@ -23,6 +23,7 @@ export const BackendDashboard: React.FC<BackendDashboardProps> = ({ dataset, onS
     softPenalty: number;
     softNote: string;
     coocWeight: number;
+    coocModifiers?: { [key in IntensityLevel]?: number };
   }) => {
     const {
       traitAId,
@@ -33,6 +34,7 @@ export const BackendDashboard: React.FC<BackendDashboardProps> = ({ dataset, onS
       softPenalty,
       softNote,
       coocWeight,
+      coocModifiers,
     } = params;
 
     const isPair = (a: string, b: string) =>
@@ -45,7 +47,7 @@ export const BackendDashboard: React.FC<BackendDashboardProps> = ({ dataset, onS
         id: `hard-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         traitAId,
         traitBId,
-        reason: hardReason.trim() || '性格設定邏輯互斥',
+        reason: hardReason.trim() || '設定邏輯互斥',
       });
     }
 
@@ -61,12 +63,16 @@ export const BackendDashboard: React.FC<BackendDashboardProps> = ({ dataset, onS
     }
 
     const updatedCooc = dataset.cooccurrenceRules.filter((r) => !isPair(r.traitAId, r.traitBId));
-    if (coocWeight !== 0) {
+    const hasModifiers =
+      coocModifiers && Object.values(coocModifiers).some((v) => typeof v === 'number' && v !== 0);
+
+    if (coocWeight !== 0 || hasModifiers) {
       updatedCooc.push({
         id: `co-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         traitAId,
         traitBId,
         weight: Number(coocWeight),
+        ...(hasModifiers ? { intensityModifiers: coocModifiers } : {}),
       });
     }
 
