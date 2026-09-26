@@ -516,7 +516,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
   return (
     <div id="trait-detail-view" className="flex flex-col md:flex-row gap-5">
       {/* Left List of Traits */}
-      <div className="w-full md:w-1/3 border-2 border-black p-3 bg-(--main-color) max-h-[560px] overflow-y-auto flex flex-col gap-3">
+      <div className="w-full md:w-1/3 border-2 border-black p-3 bg-(--main-color) max-h-[500px] overflow-y-auto flex flex-col gap-3">
         {/* Top Control Action Bar */}
         <div className="flex flex-col gap-2 border-b-2 border-black pb-3">
           <div className="flex items-center justify-between">
@@ -622,7 +622,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
       </div>
 
       {/* Right Content Panel (div:nth-of-type(2)) */}
-      <div id="trait-editor-panel" className="w-full overflow-auto md:w-2/3 border-2 border-black p-5 bg-(--main-color) flex flex-col gap-5 max-h-[560px]">
+      <div id="trait-editor-panel" className="w-full overflow-auto md:w-2/3 border-2 border-black p-5 bg-(--main-color) flex flex-col gap-5 max-h-[500px]">
         {/* Global Notifications */}
         {saveNotification && (
           <div className="bg-emerald-50 border-2 border-emerald-700 text-emerald-900 text-xs px-3 py-2 font-bold flex items-center justify-between animate-in fade-in">
