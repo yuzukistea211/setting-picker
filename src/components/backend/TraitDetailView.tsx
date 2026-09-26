@@ -622,7 +622,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
       </div>
 
       {/* Right Content Panel (div:nth-of-type(2)) */}
-      <div id="trait-editor-panel" className="w-full md:w-2/3 border-2 border-black p-5 bg-(--main-color) flex flex-col gap-5 min-h-[640px]">
+      <div id="trait-editor-panel" className="w-full md:w-2/3 border-2 border-black p-5 bg-(--main-color) flex flex-col gap-5 max-h-[560px]">
         {/* Global Notifications */}
         {saveNotification && (
           <div className="bg-emerald-50 border-2 border-emerald-700 text-emerald-900 text-xs px-3 py-2 font-bold flex items-center justify-between animate-in fade-in">
