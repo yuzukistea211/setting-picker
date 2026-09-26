@@ -148,7 +148,7 @@ export const AxisManagementModal: React.FC<AxisManagementModalProps> = ({
             required
             value={newAxisName}
             onChange={(e) => setNewAxisName(e.target.value)}
-            placeholder="輸入新軸線標籤名稱 (例如：依附模式、道德抉擇)..."
+            placeholder="輸入新軸線標籤名稱"
             className="border border-black px-3 py-1.5 text-xs flex-1 focus:outline-none"
           />
           <button

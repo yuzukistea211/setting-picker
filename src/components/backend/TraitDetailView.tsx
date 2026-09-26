@@ -767,7 +767,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
 
               {relationships.positiveRules.length === 0 ? (
                 <div className="text-xs font-mono text-neutral-500 py-1">
-                  暫無明確定向的正共現設定，點擊上方按鈕可隨時新增。
+                  暫無正共現設定。
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -969,7 +969,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                   editorTab === 'basic' ? 'bg-white text-black' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
                 }`}
               >
-                基本屬性 (名稱/描述/權重/軸線)
+                基本屬性
               </button>
               <button
                 type="button"
