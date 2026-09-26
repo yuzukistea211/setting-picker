@@ -483,7 +483,7 @@ export const RelationshipNetworkPage: React.FC = () => {
             className="flex items-center gap-1.5 px-2.5 py-1.5 border border-black bg-white text-xs font-bold hover:bg-black hover:text-white cursor-pointer"
           >
             <RotateCcw size={14} />
-            <span>重設</span>
+            <span>重置關係網</span>
           </button>
         </div>
       </div>

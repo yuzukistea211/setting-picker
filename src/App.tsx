@@ -102,7 +102,7 @@ export default function App() {
     setCurrentResult(refreshed);
     setNotification({
       type: 'success',
-      message: '詞庫已重設回預設心理學詞條資料集。',
+      message: '詞庫已重設回預設詞條資料集。',
     });
   };
 
