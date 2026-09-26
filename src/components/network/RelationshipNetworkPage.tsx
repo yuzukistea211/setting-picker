@@ -893,11 +893,12 @@ export const RelationshipNetworkPage: React.FC = () => {
                     const cB = networkData.characters.find((c) => c.id === r.targetId);
                     if (!cA || !cB) return null;
                     return (
-                      <div
+                      <button
                         key={r.id}
+                        type="button"
                         id={`rel-item-${r.id}`}
                         onClick={() => setSelectedRelationshipId(r.id)}
-                        className="border border-black p-2 bg-neutral-50 hover:bg-white cursor-pointer flex flex-col gap-1 transition-colors"
+                        className="w-full text-left border border-black p-2 bg-neutral-50 hover:bg-white cursor-pointer flex flex-col gap-1 transition-colors"
                       >
                         <div className="flex items-center justify-between text-xs font-bold">
                           <span className="flex items-center gap-1">
@@ -913,7 +914,7 @@ export const RelationshipNetworkPage: React.FC = () => {
                         <div className="text-[11px] text-neutral-600 truncate font-mono">
                           {cB.name}：{r.targetToSourceThought || '—'}
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>

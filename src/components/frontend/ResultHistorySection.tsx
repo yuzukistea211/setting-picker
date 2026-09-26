@@ -44,11 +44,12 @@ export const ResultHistorySection: React.FC<ResultHistorySectionProps> = ({
           {history.map((hist) => {
             const isSelected = currentResultId === hist.id;
             return (
-              <div
+              <button
                 key={hist.id}
+                type="button"
                 id={`history-item-${hist.id}`}
                 onClick={() => onSelectHistoryItem(hist)}
-                className={`border p-2.5 flex items-center justify-between gap-3 text-xs cursor-pointer transition-colors ${
+                className={`w-full text-left border p-2.5 flex items-center justify-between gap-3 text-xs cursor-pointer transition-colors ${
                   isSelected
                     ? 'border-2 border-black bg-neutral-100 font-bold'
                     : 'border-black hover:bg-neutral-50'
@@ -81,7 +82,7 @@ export const ResultHistorySection: React.FC<ResultHistorySectionProps> = ({
                 </div>
 
                 <ArrowRight size={14} className="shrink-0" />
-              </div>
+              </button>
             );
           })}
         </div>

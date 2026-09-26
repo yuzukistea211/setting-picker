@@ -7,10 +7,11 @@ interface NavbarProps {
   onTabChange: (tab: 'frontend' | 'backend' | 'network') => void;
   dataset: Dataset;
   onImportDataset: (dataset: Dataset) => void;
-  onOpenMergeModal: (rawJson: any, fileName: string) => void;
+  onOpenMergeModal: (rawJson: unknown, fileName: string) => void;
   onResetDataset: () => void;
   isDarkMode: boolean;
   onToggleDarkMode: () => void;
+  onError?: (message: string) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -22,6 +23,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onResetDataset,
   isDarkMode,
   onToggleDarkMode,
+  onError,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mergeInputRef = useRef<HTMLInputElement>(null);
@@ -47,11 +49,11 @@ export const Navbar: React.FC<NavbarProps> = ({
         if (parsed && (Array.isArray(parsed.traits) || Array.isArray(parsed))) {
           onImportDataset(parsed);
         } else {
-          alert('匯入失敗：檔案缺少詞條資料。');
+          onError?.('匯入失敗：檔案缺少詞條資料。');
         }
       } catch (err) {
         console.error('Invalid JSON file', err);
-        alert('匯入失敗：非有效 JSON 格式。');
+        onError?.('匯入失敗：非有效 JSON 格式。');
       }
     };
     reader.readAsText(file);
@@ -71,7 +73,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         onOpenMergeModal(parsed, file.name);
       } catch (err) {
         console.error('Invalid JSON file for merge', err);
-        alert('檔案讀取失敗：非有效 JSON 格式檔案。');
+        onError?.('檔案讀取失敗：非有效 JSON 格式檔案。');
       }
     };
     reader.readAsText(file);

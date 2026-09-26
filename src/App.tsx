@@ -26,7 +26,7 @@ export default function App() {
   // Merge modal states
   const [isMergeModalOpen, setIsMergeModalOpen] = useState<boolean>(false);
   const [mergeAnalysis, setMergeAnalysis] = useState<MergeAnalysis | null>(null);
-  const [mergeRawData, setMergeRawData] = useState<any>(null);
+  const [mergeRawData, setMergeRawData] = useState<unknown>(null);
   const [mergeFileName, setMergeFileName] = useState<string>('');
 
   // Top notification banner
@@ -106,7 +106,7 @@ export default function App() {
     });
   };
 
-  const handleOpenMergeModal = (rawJson: any, fileName: string) => {
+  const handleOpenMergeModal = (rawJson: unknown, fileName: string) => {
     const analysis = analyzeMerge(dataset, rawJson);
     if (!analysis.isValid) {
       setNotification({
@@ -171,6 +171,7 @@ export default function App() {
         onResetDataset={handleResetDataset}
         isDarkMode={isDarkMode}
         onToggleDarkMode={handleToggleDarkMode}
+        onError={(message) => setNotification({ type: 'error', message })}
       />
 
       {/* Global Notification Banner */}

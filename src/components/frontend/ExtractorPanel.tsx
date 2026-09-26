@@ -1,5 +1,5 @@
-import React from 'react';
-import { BotMessageSquare, RefreshCw, X, CheckSquare, Square, Lock } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { BotMessageSquare, RefreshCw, X, CheckSquare, Square, Lock, Minus, Plus } from 'lucide-react';
 import { AxisDefinition, Trait } from '../../types';
 
 interface ExtractorPanelProps {
@@ -33,6 +33,45 @@ export const ExtractorPanel: React.FC<ExtractorPanelProps> = ({
   isGenerating,
   lockedCount = 0,
 }) => {
+  const [inputValue, setInputValue] = useState<string>(String(traitCount));
+
+  useEffect(() => {
+    setInputValue(String(traitCount));
+  }, [traitCount]);
+
+  const maxLimit = Math.max(traits.length, 10) || 50;
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setInputValue(val);
+    const parsed = parseInt(val, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      onChangeTraitCount(Math.min(parsed, maxLimit));
+    }
+  };
+
+  const handleInputBlur = () => {
+    const parsed = parseInt(inputValue, 10);
+    if (isNaN(parsed) || parsed < 1) {
+      setInputValue('1');
+      onChangeTraitCount(1);
+    } else {
+      const clamped = Math.max(1, Math.min(parsed, maxLimit));
+      setInputValue(String(clamped));
+      onChangeTraitCount(clamped);
+    }
+  };
+
+  const handleIncrement = () => {
+    const next = Math.min(traitCount + 1, maxLimit);
+    onChangeTraitCount(next);
+  };
+
+  const handleDecrement = () => {
+    const next = Math.max(1, traitCount - 1);
+    onChangeTraitCount(next);
+  };
+
   return (
     <aside
       id="panel-extractor"
@@ -44,18 +83,63 @@ export const ExtractorPanel: React.FC<ExtractorPanelProps> = ({
           <span className="text-sm font-black tracking-wider uppercase">設定</span>
         </div>
 
-        {/* Trait Count Selector */}
+        {/* Trait Count Selector - Number Input */}
         <div className="flex flex-col gap-2">
-          <label className="text-xs font-bold tracking-wider uppercase">詞條抽取數量</label>
-          <div className="grid grid-cols-5 border border-black">
+          <div className="flex items-center justify-between">
+            <label htmlFor="input-trait-count" className="text-xs font-bold tracking-wider uppercase">
+              詞條抽取數量
+            </label>
+            <span className="text-[11px] font-mono text-neutral-500">
+              範圍: 1 ~ {maxLimit}
+            </span>
+          </div>
+
+          <div className="flex items-center border border-black bg-white">
+            <button
+              id="btn-count-decrease"
+              type="button"
+              onClick={handleDecrement}
+              disabled={traitCount <= 1}
+              title="減少數量"
+              className="w-10 h-10 flex items-center justify-center border-r border-black hover:bg-neutral-100 disabled:opacity-40 disabled:cursor-not-allowed font-black text-black cursor-pointer select-none transition-colors"
+            >
+              <Minus size={16} />
+            </button>
+            <input
+              id="input-trait-count"
+              type="number"
+              min={1}
+              max={maxLimit}
+              value={inputValue}
+              onChange={handleInputChange}
+              onBlur={handleInputBlur}
+              className="w-full text-center py-2 text-base font-black font-mono focus:outline-none bg-transparent"
+            />
+            <button
+              id="btn-count-increase"
+              type="button"
+              onClick={handleIncrement}
+              disabled={traitCount >= maxLimit}
+              title="增加數量"
+              className="w-10 h-10 flex items-center justify-center border-l border-black hover:bg-neutral-100 disabled:opacity-40 disabled:cursor-not-allowed font-black text-black cursor-pointer select-none transition-colors"
+            >
+              <Plus size={16} />
+            </button>
+          </div>
+
+          {/* Quick presets */}
+          <div className="flex items-center gap-1.5 pt-0.5">
+            <span className="text-[11px] text-neutral-500 font-mono">常用：</span>
             {[3, 4, 5, 6, 7].map((num) => (
               <button
                 key={num}
                 id={`btn-count-${num}`}
                 type="button"
                 onClick={() => onChangeTraitCount(num)}
-                className={`py-2 text-center text-sm font-black border-r last:border-r-0 border-black transition-colors cursor-pointer ${
-                  traitCount === num ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
+                className={`flex-1 py-1 text-center text-xs font-mono font-bold border border-black transition-colors cursor-pointer ${
+                  traitCount === num
+                    ? 'bg-black text-white'
+                    : 'bg-white text-black hover:bg-neutral-100'
                 }`}
               >
                 {num}

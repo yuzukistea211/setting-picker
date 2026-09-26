@@ -171,19 +171,21 @@ export const AddTraitModal: React.FC<AddTraitModalProps> = ({
               const conflict = checkCandidateConflicts(t);
 
               return (
-                <div
+                <button
                   key={t.id}
+                  type="button"
+                  disabled={isPresent}
                   onClick={() => {
                     if (!isPresent) {
                       setCandidateTrait(t);
                     }
                   }}
-                  className={`p-2.5 flex flex-col gap-1.5 text-xs transition-colors cursor-pointer ${
+                  className={`w-full text-left p-2.5 flex flex-col gap-1.5 text-xs transition-colors ${
                     isPresent
                       ? 'opacity-40 bg-neutral-100 cursor-not-allowed'
                       : isSelected
-                      ? 'bg-neutral-100 border-2 border-black font-medium'
-                      : 'hover:bg-neutral-50'
+                      ? 'bg-neutral-100 border-2 border-black font-medium cursor-pointer'
+                      : 'hover:bg-neutral-50 cursor-pointer'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -221,7 +223,7 @@ export const AddTraitModal: React.FC<AddTraitModalProps> = ({
                       互斥原因：{conflict.reason}
                     </p>
                   )}
-                </div>
+                </button>
               );
             })
           )}

@@ -8,7 +8,7 @@ export interface MergeOptions {
 export interface MergeAnalysis {
   isValid: boolean;
   errorMessage?: string;
-  incomingRaw: any;
+  incomingRaw: unknown;
   incomingAxesCount: number;
   newAxesNames: string[];
   incomingTraitsCount: number;
@@ -34,14 +34,86 @@ export interface MergeSummary {
   totalAxesAfter: number;
 }
 
+interface RawTraitObject {
+  id?: string;
+  name?: string;
+  axis?: string;
+  description?: string;
+  baseWeight?: number;
+}
+
+interface RawAxisObject {
+  id?: string;
+  name?: string;
+}
+
+interface RawCooccurrenceObject {
+  id?: string;
+  traitAId?: string;
+  traitBId?: string;
+  weight?: number;
+  intensityModifiers?: Record<string, number>;
+}
+
+interface RawSoftObject {
+  id?: string;
+  traitAId?: string;
+  traitBId?: string;
+  penaltyMultiplier?: number;
+  note?: string;
+}
+
+interface RawHardObject {
+  id?: string;
+  traitAId?: string;
+  traitBId?: string;
+  reason?: string;
+}
+
+function extractRawCollections(incomingRaw: unknown): {
+  rawTraits: RawTraitObject[];
+  rawAxes: RawAxisObject[];
+  rawCo: RawCooccurrenceObject[];
+  rawSoft: RawSoftObject[];
+  rawHard: RawHardObject[];
+} | null {
+  if (!incomingRaw || typeof incomingRaw !== 'object') {
+    return null;
+  }
+
+  if (Array.isArray(incomingRaw)) {
+    return {
+      rawTraits: incomingRaw as RawTraitObject[],
+      rawAxes: [],
+      rawCo: [],
+      rawSoft: [],
+      rawHard: [],
+    };
+  }
+
+  const rawObj = incomingRaw as Record<string, unknown>;
+  if (Array.isArray(rawObj.traits)) {
+    return {
+      rawTraits: rawObj.traits as RawTraitObject[],
+      rawAxes: Array.isArray(rawObj.axes) ? (rawObj.axes as RawAxisObject[]) : [],
+      rawCo: Array.isArray(rawObj.cooccurrenceRules) ? (rawObj.cooccurrenceRules as RawCooccurrenceObject[]) : [],
+      rawSoft: Array.isArray(rawObj.softExclusions) ? (rawObj.softExclusions as RawSoftObject[]) : [],
+      rawHard: Array.isArray(rawObj.hardExclusions) ? (rawObj.hardExclusions as RawHardObject[]) : [],
+    };
+  }
+
+  return null;
+}
+
 /**
  * Validates and analyzes an incoming dataset before merging.
  */
-export function analyzeMerge(current: Dataset, incomingRaw: any): MergeAnalysis {
-  if (!incomingRaw || typeof incomingRaw !== 'object') {
+export function analyzeMerge(current: Dataset, incomingRaw: unknown): MergeAnalysis {
+  const collections = extractRawCollections(incomingRaw);
+  if (!collections) {
     return {
       isValid: false,
-      errorMessage: '檔案格式無效，請提供有效的 JSON 物件或詞庫資料。',
+      errorMessage: '未在檔案中找到有效的詞條清單 (traits)，無法合併。',
       incomingRaw: null,
       incomingAxesCount: 0,
       newAxesNames: [],
@@ -54,38 +126,12 @@ export function analyzeMerge(current: Dataset, incomingRaw: any): MergeAnalysis 
     };
   }
 
-  // Handle both { traits: [...], axes: [...] } and direct array of traits [...]
-  let rawTraits: any[] = [];
-  let rawAxes: any[] = [];
-  let rawCo: any[] = [];
-  let rawSoft: any[] = [];
-  let rawHard: any[] = [];
+  const { rawTraits, rawAxes, rawCo, rawSoft, rawHard } = collections;
+  const validTraits = rawTraits.filter(
+    (t): t is RawTraitObject & { name: string } =>
+      Boolean(t && typeof t.name === 'string' && t.name.trim().length > 0),
+  );
 
-  if (Array.isArray(incomingRaw)) {
-    rawTraits = incomingRaw;
-  } else if (Array.isArray(incomingRaw.traits)) {
-    rawTraits = incomingRaw.traits;
-    rawAxes = Array.isArray(incomingRaw.axes) ? incomingRaw.axes : [];
-    rawCo = Array.isArray(incomingRaw.cooccurrenceRules) ? incomingRaw.cooccurrenceRules : [];
-    rawSoft = Array.isArray(incomingRaw.softExclusions) ? incomingRaw.softExclusions : [];
-    rawHard = Array.isArray(incomingRaw.hardExclusions) ? incomingRaw.hardExclusions : [];
-  } else {
-    return {
-      isValid: false,
-      errorMessage: '未在檔案中找到詞條清單 (traits)，無法合併。',
-      incomingRaw: null,
-      incomingAxesCount: 0,
-      newAxesNames: [],
-      incomingTraitsCount: 0,
-      newTraitsCount: 0,
-      duplicateTraitNames: [],
-      incomingCoRulesCount: 0,
-      incomingSoftRulesCount: 0,
-      incomingHardRulesCount: 0,
-    };
-  }
-
-  const validTraits = rawTraits.filter((t) => t && typeof t.name === 'string' && t.name.trim().length > 0);
   if (validTraits.length === 0) {
     return {
       isValid: false,
@@ -161,25 +207,15 @@ export function analyzeMerge(current: Dataset, incomingRaw: any): MergeAnalysis 
  */
 export function executeMerge(
   current: Dataset,
-  incomingRaw: any,
+  incomingRaw: unknown,
   options: MergeOptions = { duplicateStrategy: 'update', mergeRules: true }
 ): { mergedDataset: Dataset; summary: MergeSummary } {
-  // Normalize incoming structure
-  let rawTraits: any[] = [];
-  let rawAxes: any[] = [];
-  let rawCo: any[] = [];
-  let rawSoft: any[] = [];
-  let rawHard: any[] = [];
-
-  if (Array.isArray(incomingRaw)) {
-    rawTraits = incomingRaw;
-  } else if (incomingRaw && typeof incomingRaw === 'object') {
-    rawTraits = Array.isArray(incomingRaw.traits) ? incomingRaw.traits : [];
-    rawAxes = Array.isArray(incomingRaw.axes) ? incomingRaw.axes : [];
-    rawCo = Array.isArray(incomingRaw.cooccurrenceRules) ? incomingRaw.cooccurrenceRules : [];
-    rawSoft = Array.isArray(incomingRaw.softExclusions) ? incomingRaw.softExclusions : [];
-    rawHard = Array.isArray(incomingRaw.hardExclusions) ? incomingRaw.hardExclusions : [];
-  }
+  const collections = extractRawCollections(incomingRaw);
+  const rawTraits = collections?.rawTraits || [];
+  const rawAxes = collections?.rawAxes || [];
+  const rawCo = collections?.rawCo || [];
+  const rawSoft = collections?.rawSoft || [];
+  const rawHard = collections?.rawHard || [];
 
   // 1. Merge Axes
   const mergedAxes: AxisDefinition[] = [...current.axes];

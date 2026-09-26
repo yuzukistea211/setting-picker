@@ -39,18 +39,12 @@ export const TraitFrequencyD3Chart: React.FC<TraitFrequencyD3ChartProps> = ({ st
   useEffect(() => {
     if (!svgRef.current || !containerRef.current || sortedStats.length === 0) return;
 
-    const containerWidth = containerRef.current.clientWidth || 700;
-    // Each vertical bar needs sufficient width for name and values
-    const minBarWidth = 46;
+    const containerWidth = containerRef.current.clientWidth || 928;
+    const minBarWidth = 44;
     const margin = { top: 40, right: 30, bottom: 95, left: 60 };
     const chartHeight = 380;
 
-    // Determine width based on count of items vs container
-    //const calculatedWidth = Math.max(
-    //  containerWidth,
-    //  margin.left + margin.right + sortedStats.length * minBarWidth,
-    //);
-    const width = 928;
+    const width = Math.max(containerWidth, margin.left + margin.right + sortedStats.length * minBarWidth);
     const height = chartHeight;
 
     const svg = d3.select(svgRef.current);

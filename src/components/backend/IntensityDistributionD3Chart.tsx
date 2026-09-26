@@ -44,14 +44,14 @@ export const IntensityDistributionD3Chart: React.FC<IntensityDistributionD3Chart
     }
 
     const expectedMap: Record<IntensityLevel, number> = {
-      隱藏: 10,
-      輕微: 25,
-      中等: 35,
-      強烈: 20,
-      極端: 10,
+      隱藏: 6,
+      輕微: 24,
+      中等: 40,
+      強烈: 24,
+      極端: 6,
     };
     for (const item of INTENSITY_DISTRIBUTION) {
-      expectedMap[item.level] = item.prob * 100;
+      expectedMap[item.level] = Math.round(item.prob * 100);
     }
 
     let largestDiff = 0;
@@ -410,7 +410,7 @@ export const IntensityDistributionD3Chart: React.FC<IntensityDistributionD3Chart
       </div>
 
       <div className="text-[11px] text-neutral-600 font-mono">
-        * 總取樣詞條次數：<span className="font-bold text-black">{totalSamples.toLocaleString()} 條次</span>。常態分佈理論鐘形權重分配為：隱藏 10%、輕微 25%、中等 35%、強烈 20%、極端 10%。
+        * 總取樣詞條次數：<span className="font-bold text-black">{totalSamples.toLocaleString()} 條次</span>。常態分佈理論鐘形權重分配為：隱藏 6%、輕微 24%、中等 40%、強烈 24%、極端 6%。
       </div>
     </div>
   );

@@ -19,6 +19,7 @@ export const AxisManagementModal: React.FC<AxisManagementModalProps> = ({
   const [editingAxisId, setEditingAxisId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [axisPendingDelete, setAxisPendingDelete] = useState<AxisDefinition | null>(null);
 
   if (!isOpen) return null;
 
@@ -84,18 +85,9 @@ export const AxisManagementModal: React.FC<AxisManagementModalProps> = ({
     setErrorMsg('');
   };
 
-  // Delete Axis
-  const handleDeleteAxis = (axis: AxisDefinition) => {
+  // Delete Axis execution
+  const executeDeleteAxis = (axis: AxisDefinition) => {
     const traitsInAxis = dataset.traits.filter((t) => t.axis === axis.name);
-    if (traitsInAxis.length > 0) {
-      if (
-        !window.confirm(
-          `該軸線下尚有 ${traitsInAxis.length} 個詞條（如：${traitsInAxis[0].name}）。刪除後這些詞條將被移至「未分類」。確定刪除嗎？`,
-        )
-      ) {
-        return;
-      }
-    }
 
     // Ensure there's an "未分類" axis if traits were in the deleted axis
     let updatedAxes = dataset.axes.filter((a) => a.id !== axis.id);
@@ -113,6 +105,16 @@ export const AxisManagementModal: React.FC<AxisManagementModalProps> = ({
       axes: updatedAxes,
       traits: updatedTraits,
     });
+    setAxisPendingDelete(null);
+  };
+
+  const handleDeleteAxis = (axis: AxisDefinition) => {
+    const traitsInAxis = dataset.traits.filter((t) => t.axis === axis.name);
+    if (traitsInAxis.length > 0) {
+      setAxisPendingDelete(axis);
+    } else {
+      executeDeleteAxis(axis);
+    }
   };
 
   return (
@@ -138,6 +140,33 @@ export const AxisManagementModal: React.FC<AxisManagementModalProps> = ({
         {errorMsg && (
           <div className="bg-rose-100 border border-rose-800 text-rose-900 text-xs p-2 font-bold">
             {errorMsg}
+          </div>
+        )}
+
+        {/* Confirmation prompt for deleting axis with traits */}
+        {axisPendingDelete && (
+          <div className="bg-amber-50 border-2 border-amber-600 p-3 text-xs flex flex-col gap-2">
+            <div className="font-bold text-amber-900">
+              軸線「{axisPendingDelete.name}」下尚有{' '}
+              {dataset.traits.filter((t) => t.axis === axisPendingDelete.name).length}{' '}
+              個詞條。刪除後這些詞條將自動歸類至「未分類」。
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setAxisPendingDelete(null)}
+                className="px-2.5 py-1 border border-black bg-white hover:bg-neutral-100 text-xs font-bold cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => executeDeleteAxis(axisPendingDelete)}
+                className="px-2.5 py-1 border-2 border-amber-800 bg-amber-700 text-white hover:bg-amber-800 text-xs font-bold cursor-pointer"
+              >
+                確認刪除
+              </button>
+            </div>
           </div>
         )}
 

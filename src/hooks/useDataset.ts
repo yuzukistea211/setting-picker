@@ -33,7 +33,7 @@ export function useDataset() {
 
   const handleMergeDataset = useCallback(
     async (
-      incomingRaw: any,
+      incomingRaw: unknown,
       options: MergeOptions = { duplicateStrategy: 'update', mergeRules: true }
     ): Promise<MergeSummary> => {
       const { mergedDataset, summary } = executeMerge(dataset, incomingRaw, options);

@@ -1,4 +1,4 @@
-import { Dataset, NetworkData, MetricDefinition, CharacterRelationship } from '../types';
+import { Dataset, NetworkData, MetricDefinition, CharacterRelationship, NetworkCharacter } from '../types';
 import { DEFAULT_DATASET } from '../data/defaultTraits';
 
 const DB_NAME = 'oc_trait_generator_db';
@@ -56,45 +56,56 @@ export const DEFAULT_NETWORK_DATA: NetworkData = {
   ],
 };
 
-export function migrateNetworkData(raw: any): NetworkData {
-  if (!raw) return DEFAULT_NETWORK_DATA;
+export function migrateNetworkData(raw: unknown): NetworkData {
+  if (!raw || typeof raw !== 'object') return DEFAULT_NETWORK_DATA;
 
-  let metricDefinitions: MetricDefinition[] = Array.isArray(raw.metricDefinitions) && raw.metricDefinitions.length > 0
-    ? raw.metricDefinitions
-    : DEFAULT_METRIC_DEFINITIONS;
+  const rawObj = raw as Record<string, unknown>;
+
+  const metricDefinitions: MetricDefinition[] =
+    Array.isArray(rawObj.metricDefinitions) && rawObj.metricDefinitions.length > 0
+      ? (rawObj.metricDefinitions as MetricDefinition[])
+      : DEFAULT_METRIC_DEFINITIONS;
 
   // Legacy key mapper for removing Valence, Attachment, Competence, Admiration, Vulnerability
   const legacyKeyMap: Record<string, string> = {
     valence: 'metric-1',
-    attachment: 'metric-2'
+    attachment: 'metric-2',
   };
 
-  const relationships: CharacterRelationship[] = (raw.relationships || []).map((rel: any) => {
-    const migrateMetrics = (m: Record<string, number> | undefined): Record<string, number> => {
+  const rawRels = Array.isArray(rawObj.relationships) ? rawObj.relationships : [];
+  const relationships: CharacterRelationship[] = rawRels.map((item: unknown) => {
+    const rel = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
+    const migrateMetrics = (m: unknown): Record<string, number> => {
       const res: Record<string, number> = {};
-      if (!m) return res;
-      for (const [k, v] of Object.entries(m)) {
-        if (legacyKeyMap[k]) {
-          res[legacyKeyMap[k]] = v;
-        } else {
-          res[k] = v;
+      if (!m || typeof m !== 'object') return res;
+      for (const [k, v] of Object.entries(m as Record<string, unknown>)) {
+        if (typeof v === 'number') {
+          const mappedKey = legacyKeyMap[k] || k;
+          res[mappedKey] = v;
         }
       }
       return res;
     };
 
     return {
-      ...rel,
+      id: typeof rel.id === 'string' ? rel.id : `rel-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      sourceId: typeof rel.sourceId === 'string' ? rel.sourceId : '',
+      targetId: typeof rel.targetId === 'string' ? rel.targetId : '',
+      surfaceRelation: typeof rel.surfaceRelation === 'string' ? rel.surfaceRelation : '',
+      sourceToTargetThought: typeof rel.sourceToTargetThought === 'string' ? rel.sourceToTargetThought : '',
+      targetToSourceThought: typeof rel.targetToSourceThought === 'string' ? rel.targetToSourceThought : '',
       sourceToTargetMetrics: migrateMetrics(rel.sourceToTargetMetrics),
       targetToSourceMetrics: migrateMetrics(rel.targetToSourceMetrics),
     };
   });
 
+  const rawChars = Array.isArray(rawObj.characters) ? (rawObj.characters as NetworkCharacter[]) : [];
+
   return {
-    version: raw.version || 2,
-    updatedAt: raw.updatedAt || Date.now(),
+    version: typeof rawObj.version === 'number' ? rawObj.version : 2,
+    updatedAt: typeof rawObj.updatedAt === 'number' ? rawObj.updatedAt : Date.now(),
     metricDefinitions,
-    characters: raw.characters || [],
+    characters: rawChars,
     relationships,
   };
 }

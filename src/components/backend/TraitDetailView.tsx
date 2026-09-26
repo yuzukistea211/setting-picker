@@ -11,6 +11,9 @@ import {
   Check,
   RotateCcw,
   AlertCircle,
+  AlertTriangle,
+  CheckSquare,
+  Square,
   Save,
   Sliders,
   X,
@@ -95,6 +98,14 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
 
   const [saveNotification, setSaveNotification] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string>('');
+
+  // Single trait delete confirmation state
+  const [traitPendingDelete, setTraitPendingDelete] = useState<Trait | null>(null);
+
+  // Batch delete states
+  const [isBatchMode, setIsBatchMode] = useState<boolean>(false);
+  const [selectedBatchTraitIds, setSelectedBatchTraitIds] = useState<Set<string>>(new Set());
+  const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState<boolean>(false);
 
   // Trait lookup map
   const traitMap = useMemo(() => {
@@ -518,12 +529,38 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
     }
   };
 
-  // Delete Trait
+  // Calculate affected rules for single delete
+  const singleAffectedStats = useMemo(() => {
+    if (!traitPendingDelete) return { co: 0, soft: 0, hard: 0 };
+    const id = traitPendingDelete.id;
+    const co = dataset.cooccurrenceRules.filter((c) => c.traitAId === id || c.traitBId === id).length;
+    const soft = dataset.softExclusions.filter((s) => s.traitAId === id || s.traitBId === id).length;
+    const hard = dataset.hardExclusions.filter((h) => h.traitAId === id || h.traitBId === id).length;
+    return { co, soft, hard };
+  }, [traitPendingDelete, dataset.cooccurrenceRules, dataset.softExclusions, dataset.hardExclusions]);
+
+  // Calculate affected rules for batch delete
+  const batchAffectedStats = useMemo(() => {
+    if (selectedBatchTraitIds.size === 0) return { co: 0, soft: 0, hard: 0 };
+    const ids = selectedBatchTraitIds;
+    const co = dataset.cooccurrenceRules.filter((c) => ids.has(c.traitAId) || ids.has(c.traitBId)).length;
+    const soft = dataset.softExclusions.filter((s) => ids.has(s.traitAId) || ids.has(s.traitBId)).length;
+    const hard = dataset.hardExclusions.filter((h) => ids.has(h.traitAId) || ids.has(h.traitBId)).length;
+    return { co, soft, hard };
+  }, [selectedBatchTraitIds, dataset.cooccurrenceRules, dataset.softExclusions, dataset.hardExclusions]);
+
+  // Delete Trait (Trigger modal confirmation)
   const handleDeleteTrait = (traitId: string) => {
     const target = dataset.traits.find((t) => t.id === traitId);
     if (!target) return;
+    setTraitPendingDelete(target);
+  };
 
-    if (!window.confirm(`確定要刪除詞條「${target.name}」及其所有關聯共現與排除規則嗎？`)) {
+  // Execute Single Delete
+  const executeDeleteSingleTrait = (traitId: string) => {
+    const target = dataset.traits.find((t) => t.id === traitId);
+    if (!target) {
+      setTraitPendingDelete(null);
       return;
     }
 
@@ -549,10 +586,101 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
 
     onSaveDataset(updatedDataset);
     setPanelMode('view');
+    setTraitPendingDelete(null);
     if (selectedTraitId === traitId) {
       setSelectedTraitId(updatedTraits[0]?.id || '');
     }
-    setSaveNotification(`詞條「${target.name}」已刪除`);
+    setSaveNotification(`詞條「${target.name}」及其關聯規則已成功刪除！`);
+  };
+
+  // Batch Selection & Deletion Handlers
+  const toggleBatchMode = () => {
+    setIsBatchMode((prev) => {
+      const next = !prev;
+      if (!next) {
+        setSelectedBatchTraitIds(new Set());
+      }
+      return next;
+    });
+  };
+
+  const toggleTraitBatchSelect = (id: string) => {
+    setSelectedBatchTraitIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllFiltered = () => {
+    setSelectedBatchTraitIds(new Set(filteredTraits.map((t) => t.id)));
+  };
+
+  const handleInvertSelection = () => {
+    setSelectedBatchTraitIds((prev) => {
+      const next = new Set<string>();
+      filteredTraits.forEach((t) => {
+        if (!prev.has(t.id)) next.add(t.id);
+      });
+      return next;
+    });
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedBatchTraitIds(new Set());
+  };
+
+  const toggleAxisBatchSelect = (axisName: string) => {
+    const axisTraitIds = filteredTraits.filter((t) => t.axis === axisName).map((t) => t.id);
+    const allSelected = axisTraitIds.length > 0 && axisTraitIds.every((id) => selectedBatchTraitIds.has(id));
+    setSelectedBatchTraitIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        axisTraitIds.forEach((id) => next.delete(id));
+      } else {
+        axisTraitIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const executeBatchDelete = () => {
+    if (selectedBatchTraitIds.size === 0) return;
+    const idsToDelete = selectedBatchTraitIds;
+    const count = idsToDelete.size;
+
+    const updatedTraits = dataset.traits.filter((t) => !idsToDelete.has(t.id));
+    const updatedCo = dataset.cooccurrenceRules.filter(
+      (c) => !idsToDelete.has(c.traitAId) && !idsToDelete.has(c.traitBId),
+    );
+    const updatedSoft = dataset.softExclusions.filter(
+      (s) => !idsToDelete.has(s.traitAId) && !idsToDelete.has(s.traitBId),
+    );
+    const updatedHard = dataset.hardExclusions.filter(
+      (h) => !idsToDelete.has(h.traitAId) && !idsToDelete.has(h.traitBId),
+    );
+
+    const updatedDataset: Dataset = {
+      ...dataset,
+      updatedAt: Date.now(),
+      traits: updatedTraits,
+      cooccurrenceRules: updatedCo,
+      softExclusions: updatedSoft,
+      hardExclusions: updatedHard,
+    };
+
+    onSaveDataset(updatedDataset);
+    if (idsToDelete.has(selectedTraitId)) {
+      setSelectedTraitId(updatedTraits[0]?.id || '');
+    }
+    setSelectedBatchTraitIds(new Set());
+    setIsBatchDeleteModalOpen(false);
+    setIsBatchMode(false);
+    setSaveNotification(`已成功批量刪除 ${count} 個詞條及其所有關聯規則！`);
   };
 
   // Helper to get rule other trait name
@@ -573,7 +701,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-1.5">
             <button
               id="btn-add-trait"
               type="button"
@@ -599,6 +727,73 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
             </button>
           </div>
 
+          <button
+            id="btn-toggle-batch-mode"
+            type="button"
+            onClick={toggleBatchMode}
+            className={`w-full flex items-center justify-center gap-1.5 px-2 py-1.5 border-2 border-black font-black text-xs uppercase tracking-wider transition-colors cursor-pointer ${
+              isBatchMode
+                ? 'bg-rose-600 text-white border-rose-800'
+                : 'bg-neutral-50 text-neutral-900 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-600'
+            }`}
+          >
+            <Trash2 size={13} />
+            <span>{isBatchMode ? '退出批量刪除模式' : '批量刪除詞條'}</span>
+          </button>
+
+          {/* Batch Actions Toolbar */}
+          {isBatchMode && (
+            <div className="bg-rose-50 border-2 border-rose-600 p-2.5 flex flex-col gap-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-black text-rose-900 flex items-center gap-1">
+                  <CheckSquare size={13} className="text-rose-600" />
+                  <span>已選 {selectedBatchTraitIds.size} / {filteredTraits.length}</span>
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={handleSelectAllFiltered}
+                    className="text-[10px] font-bold border border-rose-600 px-1.5 py-0.5 bg-white hover:bg-rose-100 cursor-pointer text-rose-900"
+                    title="選取當前篩選的所有詞條"
+                  >
+                    全選
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleInvertSelection}
+                    className="text-[10px] font-bold border border-rose-600 px-1.5 py-0.5 bg-white hover:bg-rose-100 cursor-pointer text-rose-900"
+                    title="反向選取"
+                  >
+                    反選
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeselectAll}
+                    className="text-[10px] font-bold border border-rose-600 px-1.5 py-0.5 bg-white hover:bg-rose-100 cursor-pointer text-rose-900"
+                    title="取消所有選取"
+                  >
+                    清空
+                  </button>
+                </div>
+              </div>
+
+              <button
+                id="btn-batch-delete-confirm"
+                type="button"
+                disabled={selectedBatchTraitIds.size === 0}
+                onClick={() => setIsBatchDeleteModalOpen(true)}
+                className={`w-full flex items-center justify-center gap-1.5 py-1.5 border-2 border-black font-black text-xs uppercase tracking-wider transition-colors cursor-pointer ${
+                  selectedBatchTraitIds.size > 0
+                    ? 'bg-rose-600 text-white hover:bg-rose-700 active:bg-rose-800'
+                    : 'bg-neutral-200 text-neutral-400 border-neutral-300 cursor-not-allowed'
+                }`}
+              >
+                <Trash2 size={13} />
+                <span>確認批量刪除 ({selectedBatchTraitIds.size})</span>
+              </button>
+            </div>
+          )}
+
           {/* Quick Search */}
           <div className="relative mt-1">
             <input
@@ -621,36 +816,73 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
             return (
               <div key={axis.id} className="flex flex-col gap-1">
                 <div className="flex items-center justify-between text-[11px] font-mono font-bold border-b border-black pb-0.5 text-neutral-800">
-                  <span>{axis.name}</span>
-                  <span className="text-[10px] text-neutral-500">({axisTraits.length})</span>
+                  <div className="flex items-center gap-1">
+                    <span>{axis.name}</span>
+                    <span className="text-[10px] text-neutral-500">({axisTraits.length})</span>
+                  </div>
+                  {isBatchMode && (
+                    <button
+                      type="button"
+                      onClick={() => toggleAxisBatchSelect(axis.name)}
+                      className="text-[10px] font-sans font-bold underline text-rose-700 hover:text-rose-900 cursor-pointer"
+                    >
+                      {axisTraits.every((t) => selectedBatchTraitIds.has(t.id)) ? '取消全選' : '全選此軸'}
+                    </button>
+                  )}
                 </div>
                 <div className="flex flex-col gap-1">
                   {axisTraits.map((t) => {
+                    const isBatchSelected = selectedBatchTraitIds.has(t.id);
                     const isSelected = panelMode !== 'add' && t.id === selectedTrait?.id;
                     return (
                       <button
                         key={t.id}
                         type="button"
                         onClick={() => {
-                          setSelectedTraitId(t.id);
-                          setPanelMode('view');
+                          if (isBatchMode) {
+                            toggleTraitBatchSelect(t.id);
+                          } else {
+                            setSelectedTraitId(t.id);
+                            setPanelMode('view');
+                          }
                         }}
                         className={`text-left text-xs px-2.5 py-1.5 border transition-colors cursor-pointer flex items-center justify-between ${
-                          isSelected
-                            ? 'border-black bg-black text-white font-black'
-                            : 'border-black hover:bg-neutral-100 bg-white'
+                          isBatchMode
+                            ? isBatchSelected
+                              ? 'border-rose-600 bg-rose-50 text-rose-950 font-bold'
+                              : 'border-black hover:bg-neutral-100 bg-white'
+                            : isSelected
+                              ? 'border-black bg-black text-white font-black'
+                              : 'border-black hover:bg-neutral-100 bg-white'
                         }`}
                       >
-                        <span className="truncate pr-1">{t.name}</span>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-2 truncate pr-1">
+                          {isBatchMode && (
+                            <span
+                              className={`w-3.5 h-3.5 border flex items-center justify-center shrink-0 ${
+                                isBatchSelected
+                                  ? 'border-rose-600 bg-rose-600 text-white'
+                                  : 'border-black bg-white'
+                              }`}
+                            >
+                              {isBatchSelected && <Check size={10} strokeWidth={3} />}
+                            </span>
+                          )}
+                          <span className="truncate">{t.name}</span>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
                           <span
                             className={`text-[10px] font-mono px-1 border ${
-                              isSelected ? 'border-white text-white' : 'border-neutral-400 text-neutral-600'
+                              !isBatchMode && isSelected
+                                ? 'border-white text-white'
+                                : isBatchSelected
+                                ? 'border-rose-300 text-rose-800 bg-white'
+                                : 'border-neutral-400 text-neutral-600'
                             }`}
                           >
                             W:{t.baseWeight}
                           </span>
-                          {isSelected && <span className="text-[10px] font-mono">▶</span>}
+                          {!isBatchMode && isSelected && <span className="text-[10px] font-mono">▶</span>}
                         </div>
                       </button>
                     );
@@ -730,10 +962,12 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                     <span>修改詞條</span>
                   </button>
                   <button
+                    id="btn-delete-current-trait"
                     type="button"
                     onClick={() => handleDeleteTrait(selectedTrait.id)}
                     className="border border-black p-1.5 hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-colors cursor-pointer"
                     title="刪除此詞條"
+                    aria-label="刪除此詞條"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -1705,6 +1939,229 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
         dataset={dataset}
         onSaveDataset={onSaveDataset}
       />
+
+      {/* Single Trait Delete Confirmation Modal */}
+      {traitPendingDelete && (
+        <div
+          id="modal-single-delete-backdrop"
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-[2px] animate-in fade-in duration-150"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setTraitPendingDelete(null);
+          }}
+        >
+          <div
+            id="modal-single-delete"
+            className="w-full max-w-md bg-white border-2 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] flex flex-col animate-in zoom-in-95 duration-150"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="single-delete-title"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b-2 border-black px-4 py-3 bg-rose-50">
+              <div className="flex items-center gap-2 text-rose-900">
+                <span className="p-1 border border-black bg-rose-600 text-white">
+                  <AlertTriangle size={15} />
+                </span>
+                <h3 id="single-delete-title" className="font-black text-xs tracking-wider uppercase">
+                  刪除詞條確認
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTraitPendingDelete(null)}
+                className="p-1 border border-black bg-white hover:bg-black hover:text-white transition-colors cursor-pointer"
+                aria-label="關閉"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-4 flex flex-col gap-3 text-xs leading-relaxed">
+              <p className="text-neutral-900 font-bold">
+                確定要永久刪除詞條「<span className="text-rose-700 underline underline-offset-2">{traitPendingDelete.name}</span>」嗎？
+              </p>
+
+              <div className="flex items-center gap-2 font-mono text-[11px]">
+                <span className="border border-black px-1.5 py-0.5 bg-neutral-100 font-bold">
+                  軸線: {traitPendingDelete.axis}
+                </span>
+                <span className="border border-black px-1.5 py-0.5 bg-neutral-100 font-bold">
+                  基準權重: {traitPendingDelete.baseWeight}
+                </span>
+              </div>
+
+              {traitPendingDelete.description && (
+                <p className="text-neutral-600 border-l-2 border-black pl-2 italic text-[11px]">
+                  {traitPendingDelete.description}
+                </p>
+              )}
+
+              {/* Cascade removal stats */}
+              <div className="border-2 border-black p-3 bg-neutral-50 flex flex-col gap-1.5">
+                <span className="font-mono text-[11px] font-bold text-neutral-800">
+                  即將一併自動清理的關聯規則：
+                </span>
+                <div className="grid grid-cols-3 gap-1.5 text-center font-mono text-[11px]">
+                  <div className="border border-black bg-white p-1.5">
+                    <span className="text-[10px] text-neutral-500 block">共現規則</span>
+                    <span className="font-bold text-neutral-900">{singleAffectedStats.co} 條</span>
+                  </div>
+                  <div className="border border-black bg-white p-1.5">
+                    <span className="text-[10px] text-neutral-500 block">軟排除</span>
+                    <span className="font-bold text-neutral-900">{singleAffectedStats.soft} 條</span>
+                  </div>
+                  <div className="border border-black bg-white p-1.5">
+                    <span className="text-[10px] text-neutral-500 block">硬排除</span>
+                    <span className="font-bold text-neutral-900">{singleAffectedStats.hard} 條</span>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-rose-700 font-mono text-[11px] font-bold bg-rose-50 border border-rose-300 p-2">
+                ⚠️ 此操作無法復原，該詞條將從詞庫及關聯性矩陣中徹底清除。
+              </p>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 border-t-2 border-black px-4 py-3 bg-neutral-50">
+              <button
+                id="btn-cancel-delete-trait"
+                type="button"
+                onClick={() => setTraitPendingDelete(null)}
+                className="px-3.5 py-1.5 border border-black hover:bg-neutral-100 text-xs font-bold transition-colors cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                id="btn-confirm-delete-trait"
+                type="button"
+                onClick={() => executeDeleteSingleTrait(traitPendingDelete.id)}
+                className="flex items-center gap-1.5 px-4 py-1.5 border-2 border-black bg-rose-600 text-white hover:bg-rose-700 text-xs font-black uppercase tracking-wider transition-colors cursor-pointer shadow-xs active:translate-y-0.5"
+              >
+                <Trash2 size={13} />
+                <span>確認刪除詞條</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Trait Delete Confirmation Modal */}
+      {isBatchDeleteModalOpen && (
+        <div
+          id="modal-batch-delete-backdrop"
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-[2px] animate-in fade-in duration-150"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsBatchDeleteModalOpen(false);
+          }}
+        >
+          <div
+            id="modal-batch-delete"
+            className="w-full max-w-lg bg-white border-2 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] flex flex-col animate-in zoom-in-95 duration-150"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="batch-delete-title"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b-2 border-black px-4 py-3 bg-rose-50">
+              <div className="flex items-center gap-2 text-rose-900">
+                <span className="p-1 border border-black bg-rose-600 text-white">
+                  <Trash2 size={15} />
+                </span>
+                <h3 id="batch-delete-title" className="font-black text-xs tracking-wider uppercase">
+                  批量刪除詞條確認
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBatchDeleteModalOpen(false)}
+                className="p-1 border border-black bg-white hover:bg-black hover:text-white transition-colors cursor-pointer"
+                aria-label="關閉"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-4 flex flex-col gap-3 text-xs leading-relaxed max-h-[70vh] overflow-y-auto">
+              <p className="text-neutral-900 font-bold">
+                即將永久刪除選取的{' '}
+                <span className="text-rose-700 underline font-black text-sm">
+                  {selectedBatchTraitIds.size}
+                </span>{' '}
+                個詞條。
+              </p>
+
+              {/* Cascade removal stats */}
+              <div className="border-2 border-black p-3 bg-neutral-50 flex flex-col gap-1.5">
+                <span className="font-mono text-[11px] font-bold text-neutral-800">
+                  將連帶自動清理的所有關聯規則：
+                </span>
+                <div className="grid grid-cols-3 gap-1.5 text-center font-mono text-[11px]">
+                  <div className="border border-black bg-white p-1.5">
+                    <span className="text-[10px] text-neutral-500 block">共現規則</span>
+                    <span className="font-bold text-neutral-900">{batchAffectedStats.co} 條</span>
+                  </div>
+                  <div className="border border-black bg-white p-1.5">
+                    <span className="text-[10px] text-neutral-500 block">軟排除</span>
+                    <span className="font-bold text-neutral-900">{batchAffectedStats.soft} 條</span>
+                  </div>
+                  <div className="border border-black bg-white p-1.5">
+                    <span className="text-[10px] text-neutral-500 block">硬排除</span>
+                    <span className="font-bold text-neutral-900">{batchAffectedStats.hard} 條</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Selected traits chips */}
+              <div className="flex flex-col gap-1">
+                <span className="font-mono text-[11px] font-bold text-neutral-700">
+                  待刪除詞條清單預覽 ({selectedBatchTraitIds.size} 個)：
+                </span>
+                <div className="border border-black p-2.5 max-h-36 overflow-y-auto bg-neutral-50 flex flex-wrap gap-1.5">
+                  {dataset.traits
+                    .filter((t) => selectedBatchTraitIds.has(t.id))
+                    .map((t) => (
+                      <span
+                        key={t.id}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 border border-rose-300 bg-white text-rose-950 font-bold text-[11px] shadow-2xs"
+                      >
+                        <span>{t.name}</span>
+                        <span className="text-[9px] font-mono text-neutral-500">[{t.axis}]</span>
+                      </span>
+                    ))}
+                </div>
+              </div>
+
+              <p className="text-rose-700 font-mono text-[11px] font-bold bg-rose-50 border border-rose-300 p-2">
+                ⚠️ 此動作為永久性操作，刪除後無法撤銷，相關詞條與規則將被徹底移除。
+              </p>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 border-t-2 border-black px-4 py-3 bg-neutral-50">
+              <button
+                id="btn-cancel-batch-delete"
+                type="button"
+                onClick={() => setIsBatchDeleteModalOpen(false)}
+                className="px-3.5 py-1.5 border border-black hover:bg-neutral-100 text-xs font-bold transition-colors cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                id="btn-confirm-batch-delete-execute"
+                type="button"
+                onClick={executeBatchDelete}
+                className="flex items-center gap-1.5 px-4 py-1.5 border-2 border-black bg-rose-600 text-white hover:bg-rose-700 text-xs font-black uppercase tracking-wider transition-colors cursor-pointer shadow-xs active:translate-y-0.5"
+              >
+                <Trash2 size={13} />
+                <span>確認批量刪除 ({selectedBatchTraitIds.size} 個詞條)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
