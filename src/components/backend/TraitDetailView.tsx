@@ -746,6 +746,10 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
               </p>
             </div>
 
+            {/* 5 Intensity Distribution & Modifiers */}
+            <div className="border border-black p-3.5 flex flex-col gap-3">
+            
+
               {/* Intensity impacts on other traits */}
               {relationships.intensityImpacts.length > 0 ? (
                 <div className="flex flex-col gap-1.5 mt-1 border-t border-black pt-2">
@@ -769,7 +773,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                 </div>
               ) : (
                 <div className="text-[11px] font-mono text-neutral-500">
-                  此詞條採用基準常態分佈，尚未配置獨立強度修正偏移量。
+                  此詞條尚未配置獨立強度修正偏移量。
                 </div>
               )}
             </div>
