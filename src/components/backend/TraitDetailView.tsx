@@ -516,7 +516,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
   return (
     <div id="trait-detail-view" className="flex flex-col md:flex-row gap-5">
       {/* Left List of Traits */}
-      <div className="w-full md:w-1/3 border-2 border-black p-3 bg-(--main-color) max-h-[860px] overflow-y-auto flex flex-col gap-3">
+      <div className="w-full md:w-1/3 border-2 border-black p-3 bg-(--main-color) max-h-[560px] overflow-y-auto flex flex-col gap-3">
         {/* Top Control Action Bar */}
         <div className="flex flex-col gap-2 border-b-2 border-black pb-3">
           <div className="flex items-center justify-between">
