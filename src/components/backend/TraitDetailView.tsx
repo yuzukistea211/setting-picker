@@ -102,10 +102,14 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
   // Single trait delete confirmation state
   const [traitPendingDelete, setTraitPendingDelete] = useState<Trait | null>(null);
 
-  // Batch delete states
+  // Batch management states (merged: modify axis tags + delete)
   const [isBatchMode, setIsBatchMode] = useState<boolean>(false);
   const [selectedBatchTraitIds, setSelectedBatchTraitIds] = useState<Set<string>>(new Set());
   const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState<boolean>(false);
+  const [isBatchAxisModalOpen, setIsBatchAxisModalOpen] = useState<boolean>(false);
+  const [batchTargetAxis, setBatchTargetAxis] = useState<string>('');
+  const [isCreatingNewAxis, setIsCreatingNewAxis] = useState<boolean>(false);
+  const [batchNewAxisInput, setBatchNewAxisInput] = useState<string>('');
 
   // Trait lookup map
   const traitMap = useMemo(() => {
@@ -683,6 +687,45 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
     setSaveNotification(`已成功批量刪除 ${count} 個詞條及其所有關聯規則！`);
   };
 
+  const executeBatchChangeAxis = (targetAxisName: string) => {
+    const trimmedAxis = targetAxisName.trim();
+    if (!trimmedAxis) {
+      setErrorMsg('請指定有效的軸線名稱！');
+      return;
+    }
+    if (selectedBatchTraitIds.size === 0) return;
+
+    const count = selectedBatchTraitIds.size;
+    const axisExists = dataset.axes.some((a) => a.name === trimmedAxis);
+    const updatedAxes = axisExists
+      ? dataset.axes
+      : [...dataset.axes, { id: `axis-${Date.now()}`, name: trimmedAxis }];
+
+    const updatedTraits = dataset.traits.map((t) => {
+      if (selectedBatchTraitIds.has(t.id)) {
+        return { ...t, axis: trimmedAxis };
+      }
+      return t;
+    });
+
+    const updatedDataset: Dataset = {
+      ...dataset,
+      updatedAt: Date.now(),
+      axes: updatedAxes,
+      traits: updatedTraits,
+    };
+
+    onSaveDataset(updatedDataset);
+    if (selectedBatchTraitIds.has(selectedTraitId)) {
+      setFormAxis(trimmedAxis);
+    }
+    setSelectedBatchTraitIds(new Set());
+    setIsBatchAxisModalOpen(false);
+    setBatchNewAxisInput('');
+    setIsCreatingNewAxis(false);
+    setSaveNotification(`已成功將 ${count} 個詞條的軸線標籤更改為「${trimmedAxis}」！`);
+  };
+
   // Helper to get rule other trait name
   const getRuleOtherTrait = (otherId: string) => {
     return traitMap.get(otherId) || { id: otherId, name: otherId, axis: '未知', baseWeight: 0, description: '' };
@@ -733,27 +776,27 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
             onClick={toggleBatchMode}
             className={`w-full flex items-center justify-center gap-1.5 px-2 py-1.5 border-2 border-black font-black text-xs uppercase tracking-wider transition-colors cursor-pointer ${
               isBatchMode
-                ? 'bg-rose-600 text-white border-rose-800'
-                : 'bg-neutral-50 text-neutral-900 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-600'
+                ? 'bg-neutral-900 text-white border-black'
+                : 'bg-neutral-50 text-neutral-900 hover:bg-neutral-200 border-black'
             }`}
           >
-            <Trash2 size={13} />
-            <span>{isBatchMode ? '退出批量刪除模式' : '批量刪除詞條'}</span>
+            <Sliders size={13} />
+            <span>{isBatchMode ? '退出批量管理模式' : '批量管理'}</span>
           </button>
 
           {/* Batch Actions Toolbar */}
           {isBatchMode && (
-            <div className="bg-rose-50 border-2 border-rose-600 p-2.5 flex flex-col gap-2">
+            <div className="bg-neutral-100 border-2 border-black p-2.5 flex flex-col gap-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-black text-rose-900 flex items-center gap-1">
-                  <CheckSquare size={13} className="text-rose-600" />
+                <span className="font-black text-neutral-900 flex items-center gap-1">
+                  <CheckSquare size={13} className="text-black" />
                   <span>已選 {selectedBatchTraitIds.size} / {filteredTraits.length}</span>
                 </span>
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
                     onClick={handleSelectAllFiltered}
-                    className="text-[10px] font-bold border border-rose-600 px-1.5 py-0.5 bg-white hover:bg-rose-100 cursor-pointer text-rose-900"
+                    className="text-[10px] font-bold border border-black px-1.5 py-0.5 bg-white hover:bg-neutral-200 cursor-pointer text-neutral-900"
                     title="選取當前篩選的所有詞條"
                   >
                     全選
@@ -761,7 +804,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                   <button
                     type="button"
                     onClick={handleInvertSelection}
-                    className="text-[10px] font-bold border border-rose-600 px-1.5 py-0.5 bg-white hover:bg-rose-100 cursor-pointer text-rose-900"
+                    className="text-[10px] font-bold border border-black px-1.5 py-0.5 bg-white hover:bg-neutral-200 cursor-pointer text-neutral-900"
                     title="反向選取"
                   >
                     反選
@@ -769,7 +812,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                   <button
                     type="button"
                     onClick={handleDeselectAll}
-                    className="text-[10px] font-bold border border-rose-600 px-1.5 py-0.5 bg-white hover:bg-rose-100 cursor-pointer text-rose-900"
+                    className="text-[10px] font-bold border border-black px-1.5 py-0.5 bg-white hover:bg-neutral-200 cursor-pointer text-neutral-700"
                     title="取消所有選取"
                   >
                     清空
@@ -777,20 +820,69 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                 </div>
               </div>
 
-              <button
-                id="btn-batch-delete-confirm"
-                type="button"
-                disabled={selectedBatchTraitIds.size === 0}
-                onClick={() => setIsBatchDeleteModalOpen(true)}
-                className={`w-full flex items-center justify-center gap-1.5 py-1.5 border-2 border-black font-black text-xs uppercase tracking-wider transition-colors cursor-pointer ${
-                  selectedBatchTraitIds.size > 0
-                    ? 'bg-rose-600 text-white hover:bg-rose-700 active:bg-rose-800'
-                    : 'bg-neutral-200 text-neutral-400 border-neutral-300 cursor-not-allowed'
-                }`}
-              >
-                <Trash2 size={13} />
-                <span>確認批量刪除 ({selectedBatchTraitIds.size})</span>
-              </button>
+              {/* Combined Batch Operations Buttons */}
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  id="btn-open-batch-axis-modal"
+                  type="button"
+                  disabled={selectedBatchTraitIds.size === 0}
+                  onClick={() => {
+                    setBatchTargetAxis(dataset.axes[0]?.name || '');
+                    setIsCreatingNewAxis(false);
+                    setBatchNewAxisInput('');
+                    setIsBatchAxisModalOpen(true);
+                  }}
+                  className={`flex items-center justify-center gap-1 py-1.5 px-1 border-2 border-black font-black text-[11px] uppercase tracking-wider transition-colors cursor-pointer ${
+                    selectedBatchTraitIds.size > 0
+                      ? 'bg-amber-300 text-black hover:bg-amber-400 active:translate-y-0.5'
+                      : 'bg-neutral-200 text-neutral-400 border-neutral-300 cursor-not-allowed'
+                  }`}
+                  title="批量修改選取詞條的軸線標籤"
+                >
+                  <Tag size={12} />
+                  <span>改軸線 ({selectedBatchTraitIds.size})</span>
+                </button>
+
+                <button
+                  id="btn-batch-delete-confirm"
+                  type="button"
+                  disabled={selectedBatchTraitIds.size === 0}
+                  onClick={() => setIsBatchDeleteModalOpen(true)}
+                  className={`flex items-center justify-center gap-1 py-1.5 px-1 border-2 border-black font-black text-[11px] uppercase tracking-wider transition-colors cursor-pointer ${
+                    selectedBatchTraitIds.size > 0
+                      ? 'bg-rose-600 text-white hover:bg-rose-700 active:translate-y-0.5'
+                      : 'bg-neutral-200 text-neutral-400 border-neutral-300 cursor-not-allowed'
+                  }`}
+                  title="批量刪除選取的詞條及其所有關聯規則"
+                >
+                  <Trash2 size={12} />
+                  <span>批量刪除 ({selectedBatchTraitIds.size})</span>
+                </button>
+              </div>
+
+              {/* Quick direct axis move */}
+              <div className="flex items-center gap-1 bg-white border border-black px-1.5 py-1 text-[11px]">
+                <span className="text-[10px] font-bold text-neutral-600 shrink-0">快移軸線:</span>
+                <select
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      executeBatchChangeAxis(e.target.value);
+                    }
+                  }}
+                  disabled={selectedBatchTraitIds.size === 0}
+                  className="w-full text-[10px] bg-transparent font-mono font-bold focus:outline-none disabled:text-neutral-400 cursor-pointer truncate"
+                >
+                  <option value="" disabled>
+                    {selectedBatchTraitIds.size === 0 ? '請先勾選詞條' : '選擇目標軸線立即套用...'}
+                  </option>
+                  {dataset.axes.map((ax) => (
+                    <option key={ax.id} value={ax.name}>
+                      移至「{ax.name}」
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
 
@@ -824,7 +916,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                     <button
                       type="button"
                       onClick={() => toggleAxisBatchSelect(axis.name)}
-                      className="text-[10px] font-sans font-bold underline text-rose-700 hover:text-rose-900 cursor-pointer"
+                      className="text-[10px] font-sans font-bold underline text-neutral-700 hover:text-black cursor-pointer"
                     >
                       {axisTraits.every((t) => selectedBatchTraitIds.has(t.id)) ? '取消全選' : '全選此軸'}
                     </button>
@@ -849,7 +941,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                         className={`text-left text-xs px-2.5 py-1.5 border transition-colors cursor-pointer flex items-center justify-between ${
                           isBatchMode
                             ? isBatchSelected
-                              ? 'border-rose-600 bg-rose-50 text-rose-950 font-bold'
+                              ? 'border-2 border-black bg-amber-100 text-neutral-900 font-bold shadow-2xs'
                               : 'border-black hover:bg-neutral-100 bg-white'
                             : isSelected
                               ? 'border-black bg-black text-white font-black'
@@ -859,10 +951,10 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                         <div className="flex items-center gap-2 truncate pr-1">
                           {isBatchMode && (
                             <span
-                              className={`w-3.5 h-3.5 border flex items-center justify-center shrink-0 ${
+                              className={`w-3.5 h-3.5 border border-black flex items-center justify-center shrink-0 ${
                                 isBatchSelected
-                                  ? 'border-rose-600 bg-rose-600 text-white'
-                                  : 'border-black bg-white'
+                                  ? 'bg-black text-white'
+                                  : 'bg-white'
                               }`}
                             >
                               {isBatchSelected && <Check size={10} strokeWidth={3} />}
@@ -876,7 +968,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                               !isBatchMode && isSelected
                                 ? 'border-white text-white'
                                 : isBatchSelected
-                                ? 'border-rose-300 text-rose-800 bg-white'
+                                ? 'border-neutral-500 text-neutral-900 bg-amber-200'
                                 : 'border-neutral-400 text-neutral-600'
                             }`}
                           >
@@ -2157,6 +2249,178 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
               >
                 <Trash2 size={13} />
                 <span>確認批量刪除 ({selectedBatchTraitIds.size} 個詞條)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Trait Axis Change Modal */}
+      {isBatchAxisModalOpen && (
+        <div
+          id="modal-batch-axis-backdrop"
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-[2px] animate-in fade-in duration-150"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsBatchAxisModalOpen(false);
+          }}
+        >
+          <div
+            id="modal-batch-axis"
+            className="w-full max-w-lg bg-white border-2 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] flex flex-col animate-in zoom-in-95 duration-150"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="batch-axis-title"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b-2 border-black px-4 py-3 bg-amber-50">
+              <div className="flex items-center gap-2 text-amber-950">
+                <span className="p-1 border border-black bg-amber-400 text-black">
+                  <Tag size={15} />
+                </span>
+                <h3 id="batch-axis-title" className="font-black text-xs tracking-wider uppercase">
+                  批量修改詞條軸線標籤
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBatchAxisModalOpen(false)}
+                className="p-1 border border-black bg-white hover:bg-black hover:text-white transition-colors cursor-pointer"
+                aria-label="關閉"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-4 flex flex-col gap-3 text-xs leading-relaxed max-h-[70vh] overflow-y-auto">
+              <p className="text-neutral-900 font-bold">
+                即將為選取的{' '}
+                <span className="text-amber-800 underline font-black text-sm">
+                  {selectedBatchTraitIds.size}
+                </span>{' '}
+                個詞條統一指定新的軸線標籤。
+              </p>
+
+              {/* Axis selector */}
+              <div className="border-2 border-black p-3 bg-neutral-50 flex flex-col gap-2">
+                <span className="font-mono text-[11px] font-bold text-neutral-800">
+                  請選擇或輸入目標軸線：
+                </span>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-1.5 cursor-pointer font-bold text-xs">
+                      <input
+                        type="radio"
+                        name="axis-target-mode"
+                        checked={!isCreatingNewAxis}
+                        onChange={() => setIsCreatingNewAxis(false)}
+                        className="accent-black"
+                      />
+                      <span>選擇現有軸線</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer font-bold text-xs">
+                      <input
+                        type="radio"
+                        name="axis-target-mode"
+                        checked={isCreatingNewAxis}
+                        onChange={() => setIsCreatingNewAxis(true)}
+                        className="accent-black"
+                      />
+                      <span>新建自訂軸線</span>
+                    </label>
+                  </div>
+
+                  {!isCreatingNewAxis ? (
+                    <select
+                      value={batchTargetAxis}
+                      onChange={(e) => setBatchTargetAxis(e.target.value)}
+                      className="w-full border-2 border-black bg-white px-2.5 py-1.5 text-xs font-mono font-bold focus:outline-none cursor-pointer"
+                    >
+                      {dataset.axes.map((ax) => (
+                        <option key={ax.id} value={ax.name}>
+                          {ax.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="flex flex-col gap-1">
+                      <input
+                        type="text"
+                        value={batchNewAxisInput}
+                        onChange={(e) => setBatchNewAxisInput(e.target.value)}
+                        placeholder="輸入新軸線名稱 (例如: 價值取向、性格特徵)..."
+                        className="w-full border-2 border-black bg-white px-2.5 py-1.5 text-xs focus:outline-none"
+                        autoFocus
+                      />
+                      <span className="text-[10px] text-neutral-500 font-mono">
+                        * 若此軸線不存在，將自動在資料庫軸線目錄中建立此新軸線。
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Selected traits preview with axis change diff */}
+              <div className="flex flex-col gap-1">
+                <span className="font-mono text-[11px] font-bold text-neutral-700">
+                  即將變更的詞條清單預覽 ({selectedBatchTraitIds.size} 個)：
+                </span>
+                <div className="border border-black p-2.5 max-h-44 overflow-y-auto bg-neutral-50 flex flex-col gap-1">
+                  {dataset.traits
+                    .filter((t) => selectedBatchTraitIds.has(t.id))
+                    .map((t) => {
+                      const targetName = isCreatingNewAxis
+                        ? (batchNewAxisInput.trim() || '新軸線')
+                        : (batchTargetAxis || dataset.axes[0]?.name || '未指定');
+                      const isSame = t.axis === targetName;
+                      return (
+                        <div
+                          key={t.id}
+                          className="flex items-center justify-between px-2.5 py-1 bg-white border border-neutral-300 text-[11px]"
+                        >
+                          <span className="font-bold text-neutral-900 truncate max-w-[180px]">
+                            {t.name}
+                          </span>
+                          <div className="flex items-center gap-1.5 font-mono text-[10px] shrink-0">
+                            <span className="text-neutral-500 line-through">{t.axis}</span>
+                            <span className="text-neutral-400">➔</span>
+                            <span className={`font-bold px-1.5 py-0.5 border ${isSame ? 'border-neutral-300 text-neutral-500 bg-neutral-100' : 'border-amber-400 text-amber-950 bg-amber-100'}`}>
+                              {targetName}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 border-t-2 border-black px-4 py-3 bg-neutral-50">
+              <button
+                id="btn-cancel-batch-axis"
+                type="button"
+                onClick={() => setIsBatchAxisModalOpen(false)}
+                className="px-3.5 py-1.5 border border-black hover:bg-neutral-100 text-xs font-bold transition-colors cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                id="btn-confirm-batch-axis"
+                type="button"
+                disabled={isCreatingNewAxis && !batchNewAxisInput.trim()}
+                onClick={() => {
+                  const finalAxis = isCreatingNewAxis ? batchNewAxisInput.trim() : (batchTargetAxis || dataset.axes[0]?.name || '其他');
+                  executeBatchChangeAxis(finalAxis);
+                }}
+                className={`flex items-center gap-1.5 px-4 py-1.5 border-2 border-black text-xs font-black uppercase tracking-wider transition-colors cursor-pointer shadow-xs active:translate-y-0.5 ${
+                  isCreatingNewAxis && !batchNewAxisInput.trim()
+                    ? 'bg-neutral-300 text-neutral-500 border-neutral-400 cursor-not-allowed'
+                    : 'bg-amber-400 text-black hover:bg-amber-500'
+                }`}
+              >
+                <Tag size={13} />
+                <span>確認批量更改軸線 ({selectedBatchTraitIds.size} 個詞條)</span>
               </button>
             </div>
           </div>
