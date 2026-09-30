@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   ArrowUpRight,
   ArrowDownRight,
@@ -20,6 +20,11 @@ import {
   ArrowLeft,
   ChevronDown,
   ChevronUp,
+  Zap,
+  Filter,
+  ArrowRight,
+  RefreshCw,
+  CheckCircle2,
 } from 'lucide-react';
 import { ALL_INTENSITIES, CooccurrenceRule, Dataset, HardExclusionRule, IntensityLevel, SoftExclusionRule, Trait } from '../../types';
 import { INTENSITY_DISTRIBUTION } from '../../lib/generator';
@@ -93,8 +98,42 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
   const [newHardTargetId, setNewHardTargetId] = useState<string>('');
   const [newHardReason, setNewHardReason] = useState<string>('');
 
-  // Editor sub-tabs: 'basic' | 'cooccur' | 'soft' | 'hard' | 'intensity'
-  const [editorTab, setEditorTab] = useState<'basic' | 'cooccur' | 'soft' | 'hard' | 'intensity'>('basic');
+  // Editor sub-tabs: 'basic' | 'cooccur' | 'soft' | 'hard' | 'intensity' | 'batch-rel'
+  const [editorTab, setEditorTab] = useState<'basic' | 'cooccur' | 'soft' | 'hard' | 'intensity' | 'batch-rel'>('basic');
+
+  // Batch relationship management states within the Modify Trait Panel
+  const [batchRelSubMode, setBatchRelSubMode] = useState<'add-batch' | 'manage-existing'>('add-batch');
+
+  // Sub-mode A: Batch Apply Relationships to multiple candidate traits
+  const [batchRelSelectedTraitIds, setBatchRelSelectedTraitIds] = useState<Set<string>>(new Set());
+  const [batchRelTargetSearch, setBatchRelTargetSearch] = useState<string>('');
+  const [batchRelAxisFilter, setBatchRelAxisFilter] = useState<string>('ALL');
+  const [batchRelType, setBatchRelType] = useState<'cooccur' | 'soft' | 'hard'>('cooccur');
+  const [batchRelConflictMode, setBatchRelConflictMode] = useState<'overwrite' | 'skip'>('overwrite');
+
+  // Batch Co-occurrence settings
+  const [batchRelCoWeight, setBatchRelCoWeight] = useState<number>(5);
+  const [batchRelCoHasModifiers, setBatchRelCoHasModifiers] = useState<boolean>(false);
+  const [batchRelCoModifiers, setBatchRelCoModifiers] = useState<Record<IntensityLevel, number>>({
+    '隱藏': 0,
+    '輕微': 0,
+    '中等': 0,
+    '強烈': 0,
+    '極端': 0,
+  });
+
+  // Batch Soft Exclusion settings
+  const [batchRelSoftMultiplier, setBatchRelSoftMultiplier] = useState<number>(0.1);
+  const [batchRelSoftNote, setBatchRelSoftNote] = useState<string>('弱相容性格特徵');
+
+  // Batch Hard Exclusion settings
+  const [batchRelHardReason, setBatchRelHardReason] = useState<string>('設定邏輯互斥');
+
+  // Sub-mode B: Batch Manage Existing Relationships
+  const [batchExistingFilterType, setBatchExistingFilterType] = useState<'all' | 'cooccur' | 'soft' | 'hard'>('all');
+  const [batchExistingSearch, setBatchExistingSearch] = useState<string>('');
+  const [selectedExistingRuleIds, setSelectedExistingRuleIds] = useState<Set<string>>(new Set());
+  const [batchNewWeightVal, setBatchNewWeightVal] = useState<number>(5);
 
   const [saveNotification, setSaveNotification] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string>('');
@@ -115,6 +154,14 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
   const traitMap = useMemo(() => {
     return new Map<string, Trait>(dataset.traits.map((t) => [t.id, t]));
   }, [dataset.traits]);
+
+  // Helper to get rule other trait
+  const getRuleOtherTrait = useCallback(
+    (otherId: string) => {
+      return traitMap.get(otherId) || { id: otherId, name: otherId, axis: '未知', baseWeight: 0, description: '' };
+    },
+    [traitMap],
+  );
 
   // Traits available to link with (excluding current)
   const availableOtherTraits = useMemo(() => {
@@ -290,7 +337,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
     setEditorTab('basic');
   };
 
-  const handleStartEditTrait = (tab: 'basic' | 'cooccur' | 'soft' | 'hard' = 'basic') => {
+  const handleStartEditTrait = (tab: 'basic' | 'cooccur' | 'soft' | 'hard' | 'intensity' | 'batch-rel' = 'basic') => {
     setEditorTab(tab);
     setPanelMode('edit');
   };
@@ -340,8 +387,336 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
     });
     setShowNewCoModifiers(false);
     setExpandedCoRuleIds(new Set());
+    setBatchRelSelectedTraitIds(new Set());
+    setSelectedExistingRuleIds(new Set());
+    setBatchRelTargetSearch('');
+    setBatchRelAxisFilter('ALL');
+    setBatchExistingSearch('');
+    setBatchExistingFilterType('all');
     setErrorMsg('');
     setSaveNotification('已重設為當前設定');
+  };
+
+  // Candidate traits for batch relationship apply
+  const filteredBatchCandidates = useMemo(() => {
+    const currentId = panelMode === 'add' ? 'temp-current' : selectedTrait?.id;
+    const kw = batchRelTargetSearch.trim().toLowerCase();
+    return dataset.traits.filter((t) => {
+      if (t.id === currentId) return false;
+      if (batchRelAxisFilter !== 'ALL' && t.axis !== batchRelAxisFilter) return false;
+      if (kw) {
+        const matchName = t.name.toLowerCase().includes(kw);
+        const matchAxis = t.axis.toLowerCase().includes(kw);
+        if (!matchName && !matchAxis) return false;
+      }
+      return true;
+    });
+  }, [dataset.traits, panelMode, selectedTrait, batchRelAxisFilter, batchRelTargetSearch]);
+
+  // Check if candidate trait already has a relationship with current trait
+  const getCandidateExistingRel = (targetId: string) => {
+    const co = coRules.find((r) => r.traitAId === targetId || r.traitBId === targetId);
+    if (co) return { type: 'cooccur' as const, label: `共現 ${co.weight > 0 ? '+' : ''}${co.weight}` };
+    const soft = softRules.find((s) => s.traitAId === targetId || s.traitBId === targetId);
+    if (soft) return { type: 'soft' as const, label: `軟排除 ×${soft.penaltyMultiplier}` };
+    const hard = hardRules.find((h) => h.traitAId === targetId || h.traitBId === targetId);
+    if (hard) return { type: 'hard' as const, label: '硬排除' };
+    return null;
+  };
+
+  // Toggle selection for a candidate trait in batch mode
+  const toggleBatchRelCandidateSelect = (id: string) => {
+    setBatchRelSelectedTraitIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBatchRelSelectAllFiltered = () => {
+    setBatchRelSelectedTraitIds(new Set(filteredBatchCandidates.map((t) => t.id)));
+  };
+
+  const handleBatchRelInvertSelection = () => {
+    setBatchRelSelectedTraitIds((prev) => {
+      const next = new Set<string>();
+      filteredBatchCandidates.forEach((t) => {
+        if (!prev.has(t.id)) next.add(t.id);
+      });
+      return next;
+    });
+  };
+
+  const handleBatchRelDeselectAll = () => {
+    setBatchRelSelectedTraitIds(new Set());
+  };
+
+  const handleBatchRelSelectAxis = (axisName: string) => {
+    const axisTraits = dataset.traits.filter(
+      (t) => t.axis === axisName && (panelMode === 'add' ? true : t.id !== selectedTrait?.id),
+    );
+    setBatchRelSelectedTraitIds((prev) => {
+      const next = new Set(prev);
+      axisTraits.forEach((t) => next.add(t.id));
+      return next;
+    });
+  };
+
+  // Execute batch apply relationships
+  const handleBatchApplyRelationships = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (batchRelSelectedTraitIds.size === 0) {
+      setErrorMsg('請至少勾選一個目標詞條以進行批量套用！');
+      return;
+    }
+
+    const currentId = panelMode === 'add' ? 'temp-current' : selectedTrait?.id || 'temp-current';
+    const targetIds = Array.from(batchRelSelectedTraitIds);
+    let appliedCount = 0;
+    let skippedCount = 0;
+
+    let newCo = [...coRules];
+    let newSoft = [...softRules];
+    let newHard = [...hardRules];
+
+    targetIds.forEach((targetId) => {
+      const hasCo = newCo.some((r) => r.traitAId === targetId || r.traitBId === targetId);
+      const hasSoft = newSoft.some((s) => s.traitAId === targetId || s.traitBId === targetId);
+      const hasHard = newHard.some((h) => h.traitAId === targetId || h.traitBId === targetId);
+      const hasAny = hasCo || hasSoft || hasHard;
+
+      if (hasAny && batchRelConflictMode === 'skip') {
+        skippedCount++;
+        return;
+      }
+
+      if (batchRelConflictMode === 'overwrite') {
+        newCo = newCo.filter((r) => r.traitAId !== targetId && r.traitBId !== targetId);
+        newSoft = newSoft.filter((s) => s.traitAId !== targetId && s.traitBId !== targetId);
+        newHard = newHard.filter((h) => h.traitAId !== targetId && h.traitBId !== targetId);
+      }
+
+      if (batchRelType === 'cooccur') {
+        const hasModifiers = Object.values(batchRelCoModifiers).some((v) => typeof v === 'number' && v !== 0);
+        newCo.push({
+          id: `co-${Date.now()}-${Math.random().toString(36).substring(2, 6)}-${targetId.substring(0, 4)}`,
+          traitAId: currentId,
+          traitBId: targetId,
+          weight: Number(batchRelCoWeight),
+          ...(batchRelCoHasModifiers && hasModifiers ? { intensityModifiers: { ...batchRelCoModifiers } } : {}),
+        });
+        appliedCount++;
+      } else if (batchRelType === 'soft') {
+        newSoft.push({
+          id: `soft-${Date.now()}-${Math.random().toString(36).substring(2, 6)}-${targetId.substring(0, 4)}`,
+          traitAId: currentId,
+          traitBId: targetId,
+          penaltyMultiplier: Math.round(Number(batchRelSoftMultiplier) * 100) / 100,
+          note: batchRelSoftNote.trim() || '弱相容性格特徵',
+        });
+        appliedCount++;
+      } else if (batchRelType === 'hard') {
+        newHard.push({
+          id: `hard-${Date.now()}-${Math.random().toString(36).substring(2, 6)}-${targetId.substring(0, 4)}`,
+          traitAId: currentId,
+          traitBId: targetId,
+          reason: batchRelHardReason.trim() || '設定邏輯互斥',
+        });
+        appliedCount++;
+      }
+    });
+
+    setCoRules(newCo);
+    setSoftRules(newSoft);
+    setHardRules(newHard);
+    setBatchRelSelectedTraitIds(new Set());
+
+    const typeLabel =
+      batchRelType === 'cooccur'
+        ? `共現權重 (${batchRelCoWeight > 0 ? '+' : ''}${batchRelCoWeight})`
+        : batchRelType === 'soft'
+        ? `軟排除 (×${batchRelSoftMultiplier})`
+        : '硬排除 (邏輯互斥)';
+
+    const skipNote = skippedCount > 0 ? ` (已略過 ${skippedCount} 個已有關係的詞條)` : '';
+    setSaveNotification(`已批量為 ${appliedCount} 個詞條設定「${typeLabel}」${skipNote}！請點擊右上角「儲存詞條修改」保存。`);
+    setErrorMsg('');
+  };
+
+  // Normalized existing rules for Sub-mode B
+  const allNormalizedRules = useMemo(() => {
+    const currentId = panelMode === 'add' ? 'temp-current' : selectedTrait?.id;
+    const list: {
+      id: string;
+      type: 'cooccur' | 'soft' | 'hard';
+      typeName: string;
+      targetTrait: Trait;
+      summary: string;
+      detail: string;
+      weight?: number;
+      penalty?: number;
+      reason?: string;
+    }[] = [];
+
+    coRules.forEach((c) => {
+      const otherId = c.traitAId === currentId ? c.traitBId : c.traitAId;
+      const target = getRuleOtherTrait(otherId);
+      const hasMod = c.intensityModifiers && Object.values(c.intensityModifiers).some((v) => v !== 0);
+      list.push({
+        id: c.id,
+        type: 'cooccur',
+        typeName: '共現權重',
+        targetTrait: target,
+        summary: `權重: ${c.weight > 0 ? '+' : ''}${c.weight}`,
+        detail: hasMod ? '含自訂強度修正偏移' : '無強度修正',
+        weight: c.weight,
+      });
+    });
+
+    softRules.forEach((s) => {
+      const otherId = s.traitAId === currentId ? s.traitBId : s.traitAId;
+      const target = getRuleOtherTrait(otherId);
+      list.push({
+        id: s.id,
+        type: 'soft',
+        typeName: '軟排除',
+        targetTrait: target,
+        summary: `乘數: ×${s.penaltyMultiplier}`,
+        detail: s.note || '弱相容情境說明',
+        penalty: s.penaltyMultiplier,
+      });
+    });
+
+    hardRules.forEach((h) => {
+      const otherId = h.traitAId === currentId ? h.traitBId : h.traitAId;
+      const target = getRuleOtherTrait(otherId);
+      list.push({
+        id: h.id,
+        type: 'hard',
+        typeName: '硬排除',
+        targetTrait: target,
+        summary: '邏輯互斥阻斷',
+        detail: h.reason || '設定邏輯互斥',
+        reason: h.reason,
+      });
+    });
+
+    return list;
+  }, [coRules, softRules, hardRules, panelMode, selectedTrait, traitMap]);
+
+  const filteredNormalizedRules = useMemo(() => {
+    const kw = batchExistingSearch.trim().toLowerCase();
+    return allNormalizedRules.filter((r) => {
+      if (batchExistingFilterType !== 'all' && r.type !== batchExistingFilterType) {
+        return false;
+      }
+      if (kw) {
+        const matchName = r.targetTrait.name.toLowerCase().includes(kw);
+        const matchAxis = r.targetTrait.axis.toLowerCase().includes(kw);
+        const matchDetail = r.detail.toLowerCase().includes(kw);
+        if (!matchName && !matchAxis && !matchDetail) return false;
+      }
+      return true;
+    });
+  }, [allNormalizedRules, batchExistingFilterType, batchExistingSearch]);
+
+  const toggleExistingRuleSelect = (ruleId: string) => {
+    setSelectedExistingRuleIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(ruleId)) next.delete(ruleId);
+      else next.add(ruleId);
+      return next;
+    });
+  };
+
+  const handleSelectAllExistingRules = () => {
+    setSelectedExistingRuleIds(new Set(filteredNormalizedRules.map((r) => r.id)));
+  };
+
+  const handleDeselectAllExistingRules = () => {
+    setSelectedExistingRuleIds(new Set());
+  };
+
+  const handleBatchDeleteExistingRules = () => {
+    if (selectedExistingRuleIds.size === 0) return;
+    const count = selectedExistingRuleIds.size;
+    setCoRules((prev) => prev.filter((r) => !selectedExistingRuleIds.has(r.id)));
+    setSoftRules((prev) => prev.filter((s) => !selectedExistingRuleIds.has(s.id)));
+    setHardRules((prev) => prev.filter((h) => !selectedExistingRuleIds.has(h.id)));
+    setSelectedExistingRuleIds(new Set());
+    setSaveNotification(`已批量刪除 ${count} 條關係規則！`);
+  };
+
+  const handleBatchUpdateCoWeights = (newWeight: number) => {
+    if (selectedExistingRuleIds.size === 0) return;
+    let count = 0;
+    setCoRules((prev) =>
+      prev.map((r) => {
+        if (selectedExistingRuleIds.has(r.id)) {
+          count++;
+          return { ...r, weight: newWeight };
+        }
+        return r;
+      }),
+    );
+    setSaveNotification(`已將 ${count} 條選取的共現規則權重統一設為 ${newWeight > 0 ? '+' : ''}${newWeight}！`);
+  };
+
+  const handleBatchConvertSoftToHard = () => {
+    const selectedSoft = softRules.filter((s) => selectedExistingRuleIds.has(s.id));
+    if (selectedSoft.length === 0) return;
+    const currentId = panelMode === 'add' ? 'temp-current' : selectedTrait?.id || 'temp-current';
+    const newHardRules: HardExclusionRule[] = selectedSoft.map((s) => ({
+      id: `hard-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      traitAId: currentId,
+      traitBId: s.traitAId === currentId ? s.traitBId : s.traitAId,
+      reason: s.note || '由軟排除轉為硬排除',
+    }));
+    setSoftRules((prev) => prev.filter((s) => !selectedExistingRuleIds.has(s.id)));
+    setHardRules((prev) => [...prev, ...newHardRules]);
+    setSelectedExistingRuleIds(new Set());
+    setSaveNotification(`已將 ${selectedSoft.length} 條軟排除轉為硬排除！`);
+  };
+
+  const handleBatchConvertHardToSoft = () => {
+    const selectedHard = hardRules.filter((h) => selectedExistingRuleIds.has(h.id));
+    if (selectedHard.length === 0) return;
+    const currentId = panelMode === 'add' ? 'temp-current' : selectedTrait?.id || 'temp-current';
+    const newSoftRules: SoftExclusionRule[] = selectedHard.map((h) => ({
+      id: `soft-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      traitAId: currentId,
+      traitBId: h.traitAId === currentId ? h.traitBId : h.traitAId,
+      penaltyMultiplier: 0.1,
+      note: h.reason || '由硬排除轉為軟排除 (弱相容)',
+    }));
+    setHardRules((prev) => prev.filter((h) => !selectedExistingRuleIds.has(h.id)));
+    setSoftRules((prev) => [...prev, ...newSoftRules]);
+    setSelectedExistingRuleIds(new Set());
+    setSaveNotification(`已將 ${selectedHard.length} 條硬排除轉為軟排除！`);
+  };
+
+  const handleClearRulesByType = (type: 'all' | 'cooccur' | 'soft' | 'hard') => {
+    if (type === 'all') {
+      const count = coRules.length + softRules.length + hardRules.length;
+      setCoRules([]);
+      setSoftRules([]);
+      setHardRules([]);
+      setSelectedExistingRuleIds(new Set());
+      setSaveNotification(`已清空該詞條的所有關聯規則 (${count} 條)！`);
+    } else if (type === 'cooccur') {
+      const count = coRules.length;
+      setCoRules([]);
+      setSaveNotification(`已清空該詞條的所有共現權重規則 (${count} 條)！`);
+    } else if (type === 'soft') {
+      const count = softRules.length;
+      setSoftRules([]);
+      setSaveNotification(`已清空該詞條的所有軟排除規則 (${count} 條)！`);
+    } else if (type === 'hard') {
+      const count = hardRules.length;
+      setHardRules([]);
+      setSaveNotification(`已清空該詞條的所有硬排除規則 (${count} 條)！`);
+    }
   };
 
   // Add a Co-occurrence rule
@@ -726,15 +1101,10 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
     setSaveNotification(`已成功將 ${count} 個詞條的軸線標籤更改為「${trimmedAxis}」！`);
   };
 
-  // Helper to get rule other trait name
-  const getRuleOtherTrait = (otherId: string) => {
-    return traitMap.get(otherId) || { id: otherId, name: otherId, axis: '未知', baseWeight: 0, description: '' };
-  };
-
   return (
     <div id="trait-detail-view" className="flex flex-col md:flex-row gap-5">
       {/* Left List of Traits */}
-      <div className="w-full md:w-1/3 border-2 border-black p-3 bg-(--main-color) max-h-[500px] overflow-y-auto flex flex-col gap-3">
+      <div className="w-full md:w-1/3 border-2 border-black p-3 bg-(--main-color) min-h-[580px] max-h-[720px] overflow-y-auto flex flex-col gap-3">
         {/* Top Control Action Bar */}
         <div className="flex flex-col gap-2 border-b-2 border-black pb-3">
           <div className="flex items-center justify-between">
@@ -993,7 +1363,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
       </div>
 
       {/* Right Content Panel (div:nth-of-type(2)) */}
-      <div id="trait-editor-panel" className="w-full overflow-auto md:w-2/3 border-2 border-black p-5 bg-(--main-color) flex flex-col gap-5 max-h-[500px]">
+      <div id="trait-editor-panel" className="w-full overflow-auto md:w-2/3 border-2 border-black p-5 bg-(--main-color) flex flex-col gap-5 min-h-[580px] max-h-[720px]">
         {/* Global Notifications */}
         {saveNotification && (
           <div className="bg-emerald-50 border-2 border-emerald-700 text-emerald-900 text-xs px-3 py-2 font-bold flex items-center justify-between animate-in fade-in">
@@ -1044,6 +1414,16 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
 
                 {/* Edit and Delete Buttons */}
                 <div className="flex items-center gap-2">
+                  <button
+                    id="btn-batch-manage-current-relations"
+                    type="button"
+                    onClick={() => handleStartEditTrait('batch-rel')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 border-2 border-black bg-amber-300 text-black hover:bg-amber-400 text-xs font-black uppercase tracking-wider transition-colors cursor-pointer shadow-xs active:translate-y-0.5"
+                    title="批量管理此詞條的共現與排除關係"
+                  >
+                    <Zap size={13} className="text-black" />
+                    <span>批量管理關係</span>
+                  </button>
                   <button
                     id="btn-edit-current-trait"
                     type="button"
@@ -1110,13 +1490,23 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                 <div className="flex items-center gap-1.5">
                   <ArrowUpRight size={15} className="text-emerald-700" />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleStartEditTrait('cooccur')}
-                  className="text-[11px] font-mono font-bold underline hover:text-neutral-600 cursor-pointer"
-                >
-                  ＋ 添加/編輯共現權重
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleStartEditTrait('batch-rel')}
+                    className="text-[11px] font-mono font-bold text-amber-900 border border-black bg-amber-200 hover:bg-amber-300 px-1.5 py-0.5 cursor-pointer flex items-center gap-1 transition-colors"
+                  >
+                    <Zap size={11} />
+                    <span>批量設定</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleStartEditTrait('cooccur')}
+                    className="text-[11px] font-mono font-bold underline hover:text-neutral-600 cursor-pointer"
+                  >
+                    ＋ 添加/編輯共現權重
+                  </button>
+                </div>
               </div>
 
               {relationships.positiveRules.length === 0 ? (
@@ -1151,13 +1541,23 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                 <div className="flex items-center gap-1.5">
                   <ArrowDownRight size={15} className="text-rose-700" />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleStartEditTrait('soft')}
-                  className="text-[11px] font-mono font-bold underline hover:text-neutral-600 cursor-pointer"
-                >
-                  ＋ 添加/編輯排除規則
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleStartEditTrait('batch-rel')}
+                    className="text-[11px] font-mono font-bold text-amber-900 border border-black bg-amber-200 hover:bg-amber-300 px-1.5 py-0.5 cursor-pointer flex items-center gap-1 transition-colors"
+                  >
+                    <Zap size={11} />
+                    <span>批量設定</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleStartEditTrait('soft')}
+                    className="text-[11px] font-mono font-bold underline hover:text-neutral-600 cursor-pointer"
+                  >
+                    ＋ 添加/編輯排除規則
+                  </button>
+                </div>
               </div>
 
               {/* Hard Exclusions */}
@@ -1361,6 +1761,19 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
               >
                 詞條強度基準
               </button>
+              <button
+                id="tab-btn-batch-rel"
+                type="button"
+                onClick={() => setEditorTab('batch-rel')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-black uppercase cursor-pointer border-t-2 border-x-2 border-black -mb-[2px] transition-colors ${
+                  editorTab === 'batch-rel'
+                    ? 'bg-amber-300 text-black border-black shadow-xs font-black'
+                    : 'bg-amber-100 text-amber-950 hover:bg-amber-200'
+                }`}
+              >
+                <Zap size={13} className="text-amber-900" />
+                <span>批量管理關係 ({coRules.length + softRules.length + hardRules.length})</span>
+              </button>
             </div>
 
             {/* Tab 1: Basic attributes (名稱、描述、基準權重、軸線標籤) */}
@@ -1445,7 +1858,17 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
 
                 {/* Quick Overview of Relationships */}
                 <div className="border border-black p-3 bg-neutral-50 flex flex-col gap-2 mt-1">
-                  <span className="text-xs font-black uppercase tracking-wider">詞條關聯統計</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black uppercase tracking-wider">詞條關聯統計</span>
+                    <button
+                      type="button"
+                      onClick={() => setEditorTab('batch-rel')}
+                      className="text-[11px] font-bold text-amber-900 border border-black bg-amber-300 hover:bg-amber-400 px-2 py-0.5 cursor-pointer flex items-center gap-1 transition-colors"
+                    >
+                      <Zap size={12} />
+                      <span>批量管理關係</span>
+                    </button>
+                  </div>
                   <div className="grid grid-cols-3 gap-2 text-center text-xs">
                     <div
                       onClick={() => setEditorTab('cooccur')}
@@ -1468,6 +1891,19 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                       <div className="font-bold">硬排除 (互斥)</div>
                       <div className="font-mono font-black text-sm mt-1">{hardRules.length} 項</div>
                     </div>
+
+                    <div
+                      onClick={() => setEditorTab('batch-rel')}
+                      className="col-span-3 border-2 border-black p-2 bg-amber-200/70 hover:bg-amber-300 cursor-pointer transition-colors flex items-center justify-between shadow-2xs"
+                    >
+                      <div className="flex items-center gap-1.5 font-black text-xs text-amber-950">
+                        <Zap size={14} className="text-amber-800" />
+                        <span>批量管理與設定關係 (多詞條同時指派或批量維護)</span>
+                      </div>
+                      <span className="font-mono text-[11px] font-bold text-black border border-black bg-white px-2 py-0.5">
+                        進入批量管理 ➔
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1476,8 +1912,18 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
             {/* Tab 2: Co-occurrence Weights (共現權重) */}
             {editorTab === 'cooccur' && (
               <div className="flex flex-col gap-4 py-1">
-                <div className="border border-black p-2.5 bg-neutral-50 text-xs text-neutral-700">
-                  <span className="font-bold">說明：</span>共現權重決定抽取時兩詞條互相吸引或排斥的傾向。正權重 (+1~+10) 提高連帶被抽取的機率；負權重 (-1~-10) 降低同出機率。強度修正是在原有的共現權重基礎加上強度修正值。
+                <div className="border border-black p-2.5 bg-neutral-50 text-xs text-neutral-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex-1">
+                    <span className="font-bold">說明：</span>共現權重決定抽取時兩詞條互相吸引或排斥的傾向。正權重 (+1~+10) 提高連帶被抽取的機率；負權重 (-1~-10) 降低同出機率。強度修正是在原有的共現權重基礎加上強度修正值。
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditorTab('batch-rel')}
+                    className="shrink-0 flex items-center gap-1 border border-black px-2 py-1 bg-amber-300 hover:bg-amber-400 font-bold text-xs cursor-pointer transition-colors"
+                  >
+                    <Zap size={12} />
+                    <span>批量設定共現</span>
+                  </button>
                 </div>
 
                 {/* Add Co-occurrence Rule Sub-form */}
@@ -1717,8 +2163,18 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
             {/* Tab 3: Soft Exclusions (軟排除) */}
             {editorTab === 'soft' && (
               <div className="flex flex-col gap-4 py-1">
-                <div className="border border-black p-2.5 bg-neutral-50 text-xs text-neutral-700">
-                  <span className="font-bold">說明：</span>軟排除代表「弱相容」性格特徵，設定較低的懲罰乘數（0.01~0.9）大幅壓低同時抽取機率，並附帶特殊說明。
+                <div className="border border-black p-2.5 bg-neutral-50 text-xs text-neutral-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex-1">
+                    <span className="font-bold">說明：</span>軟排除代表「弱相容」性格特徵，設定較低的懲罰乘數（0.01~0.9）大幅壓低同時抽取機率，並附帶特殊說明。
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditorTab('batch-rel')}
+                    className="shrink-0 flex items-center gap-1 border border-black px-2.5 py-1 bg-amber-300 hover:bg-amber-400 font-bold text-xs cursor-pointer transition-colors"
+                  >
+                    <Zap size={12} />
+                    <span>批量設定軟排除</span>
+                  </button>
                 </div>
 
                 {/* Add Soft Exclusion Sub-form */}
@@ -1855,8 +2311,18 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
             {/* Tab 4: Hard Exclusions (硬排除) */}
             {editorTab === 'hard' && (
               <div className="flex flex-col gap-4 py-1">
-                <div className="border border-black p-2.5 bg-neutral-50 text-xs text-neutral-700">
-                  <span className="font-bold">說明：</span>硬排除代表絕對邏輯互斥。抽中此詞條後，被硬排除的詞條將徹底從候選池中剔除，絕不並存。
+                <div className="border border-black p-2.5 bg-neutral-50 text-xs text-neutral-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex-1">
+                    <span className="font-bold">說明：</span>硬排除代表絕對邏輯互斥。抽中此詞條後，被硬排除的詞條將徹底從候選池中剔除，絕不並存。
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditorTab('batch-rel')}
+                    className="shrink-0 flex items-center gap-1 border border-black px-2.5 py-1 bg-amber-300 hover:bg-amber-400 font-bold text-xs cursor-pointer transition-colors"
+                  >
+                    <Zap size={12} />
+                    <span>批量設定硬排除</span>
+                  </button>
                 </div>
 
                 {/* Add Hard Exclusion Sub-form */}
@@ -1982,6 +2448,777 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                 <p className="text-xs text-neutral-600 leading-relaxed font-mono mt-1 border-t border-black pt-2">
                   抽中詞條時，系統將依據常態分佈自動為詞條附加前綴強度（例如：「輕微」假性獨立、「強烈」假性獨立）。
                 </p>
+              </div>
+            )}
+
+            {/* Tab 6: Batch Relationship Management (批量管理詞條關係) */}
+            {editorTab === 'batch-rel' && (
+              <div id="batch-relationship-manager" className="flex flex-col gap-4 py-1">
+                {/* Sub-mode Navigation Switcher */}
+                <div className="flex items-center justify-between border-2 border-black p-1.5 bg-neutral-100 gap-2">
+                  <div className="flex items-center gap-1.5 flex-1">
+                    <button
+                      id="btn-submode-add-batch"
+                      type="button"
+                      onClick={() => setBatchRelSubMode('add-batch')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 text-xs font-black uppercase transition-colors cursor-pointer border ${
+                        batchRelSubMode === 'add-batch'
+                          ? 'bg-black text-white border-black shadow-xs'
+                          : 'bg-white text-black border-black hover:bg-neutral-50'
+                      }`}
+                    >
+                      <Plus size={13} />
+                      <span>批量設定/新增關係</span>
+                    </button>
+                    <button
+                      id="btn-submode-manage-existing"
+                      type="button"
+                      onClick={() => setBatchRelSubMode('manage-existing')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 text-xs font-black uppercase transition-colors cursor-pointer border ${
+                        batchRelSubMode === 'manage-existing'
+                          ? 'bg-black text-white border-black shadow-xs'
+                          : 'bg-white text-black border-black hover:bg-neutral-50'
+                      }`}
+                    >
+                      <Sliders size={13} />
+                      <span>現有關係批量管理 ({allNormalizedRules.length})</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sub-mode 1: 批量設定/新增關係 (Batch Apply) */}
+                {batchRelSubMode === 'add-batch' && (
+                  <div className="flex flex-col gap-3">
+                    {/* Top description */}
+                    <div className="border border-black p-2.5 bg-amber-50 text-xs text-amber-950 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Zap size={15} className="text-amber-700 shrink-0" />
+                        <span>
+                          <strong>批量設定精靈：</strong>勾選目標詞條，統一為「<strong>{formName || selectedTrait?.name || '當前詞條'}</strong>」指派共現權重或排除阻斷規則。
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Step 1: Target Traits Selection */}
+                    <div className="border-2 border-black p-3 bg-white flex flex-col gap-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black pb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 bg-black text-white flex items-center justify-center text-xs font-mono font-bold">1</span>
+                          <span className="font-black text-xs">勾選欲建立關係的目標詞條</span>
+                          <span className="text-[11px] font-mono border border-black px-1.5 py-0.5 bg-neutral-100 font-bold">
+                            已勾選: {batchRelSelectedTraitIds.size} / {filteredBatchCandidates.length}
+                          </span>
+                        </div>
+
+                        {/* Quick selection action buttons */}
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={handleBatchRelSelectAllFiltered}
+                            className="text-[11px] font-bold border border-black px-2 py-0.5 bg-white hover:bg-neutral-200 cursor-pointer"
+                          >
+                            全選當前
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleBatchRelInvertSelection}
+                            className="text-[11px] font-bold border border-black px-2 py-0.5 bg-white hover:bg-neutral-200 cursor-pointer"
+                          >
+                            反向勾選
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleBatchRelDeselectAll}
+                            className="text-[11px] font-bold border border-black px-2 py-0.5 bg-white hover:bg-neutral-200 cursor-pointer text-neutral-600"
+                          >
+                            清空
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Filter Controls: Axis chips & Search */}
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        {/* Search input */}
+                        <div className="relative flex-1">
+                          <input
+                            type="text"
+                            value={batchRelTargetSearch}
+                            onChange={(e) => setBatchRelTargetSearch(e.target.value)}
+                            placeholder="搜尋目標詞條名稱或軸線..."
+                            className="w-full border border-black px-2.5 py-1.5 text-xs pl-7 focus:outline-none bg-neutral-50"
+                          />
+                          <Search size={13} className="absolute left-2 top-2.5 text-neutral-500 pointer-events-none" />
+                        </div>
+
+                        {/* Axis Filter select */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-[11px] font-bold text-neutral-700">軸線:</span>
+                          <select
+                            value={batchRelAxisFilter}
+                            onChange={(e) => setBatchRelAxisFilter(e.target.value)}
+                            className="border border-black bg-white px-2 py-1 text-xs font-mono font-bold focus:outline-none cursor-pointer"
+                          >
+                            <option value="ALL">全部軸線 ({dataset.traits.length})</option>
+                            {dataset.axes.map((ax) => (
+                              <option key={ax.id} value={ax.name}>
+                                {ax.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Quick Axis Select Chips */}
+                      <div className="flex flex-wrap items-center gap-1 text-[10px]">
+                        <span className="font-bold text-neutral-600 shrink-0">整軸快選:</span>
+                        {dataset.axes.map((ax) => (
+                          <button
+                            key={ax.id}
+                            type="button"
+                            onClick={() => handleBatchRelSelectAxis(ax.name)}
+                            className="border border-black px-1.5 py-0.5 bg-neutral-100 hover:bg-black hover:text-white transition-colors cursor-pointer font-mono"
+                            title={`快速勾選「${ax.name}」軸的所有詞條`}
+                          >
+                            ＋ {ax.name}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Candidate Traits Grid / Checklist */}
+                      <div className="border border-black max-h-48 overflow-y-auto p-2 bg-neutral-50 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5">
+                        {filteredBatchCandidates.map((cand) => {
+                          const isSelected = batchRelSelectedTraitIds.has(cand.id);
+                          const existingRel = getCandidateExistingRel(cand.id);
+
+                          return (
+                            <div
+                              key={cand.id}
+                              onClick={() => toggleBatchRelCandidateSelect(cand.id)}
+                              className={`border p-1.5 text-xs flex items-center justify-between cursor-pointer transition-colors select-none ${
+                                isSelected
+                                  ? 'border-2 border-black bg-amber-100 font-bold shadow-2xs'
+                                  : 'border-neutral-300 bg-white hover:bg-neutral-100'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 truncate pr-1">
+                                <span
+                                  className={`w-3.5 h-3.5 border border-black flex items-center justify-center shrink-0 ${
+                                    isSelected ? 'bg-black text-white' : 'bg-white'
+                                  }`}
+                                >
+                                  {isSelected && <Check size={10} strokeWidth={3} />}
+                                </span>
+                                <div className="flex flex-col truncate">
+                                  <span className="truncate">{cand.name}</span>
+                                  <span className="text-[9px] text-neutral-500 font-mono">[{cand.axis}]</span>
+                                </div>
+                              </div>
+
+                              {existingRel && (
+                                <span
+                                  className={`text-[9px] font-mono px-1 py-0.5 border shrink-0 ${
+                                    existingRel.type === 'cooccur'
+                                      ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
+                                      : existingRel.type === 'soft'
+                                      ? 'border-amber-600 bg-amber-50 text-amber-900'
+                                      : 'border-rose-600 bg-rose-50 text-rose-900'
+                                  }`}
+                                  title={`目前已有規則: ${existingRel.label}`}
+                                >
+                                  {existingRel.label}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {filteredBatchCandidates.length === 0 && (
+                          <div className="col-span-full py-6 text-center text-xs font-mono text-neutral-500">
+                            無符合條件的候選目標詞條
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Step 2: Configure Relationship */}
+                    <div className="border-2 border-black p-3 bg-white flex flex-col gap-3">
+                      <div className="flex items-center gap-2 border-b border-black pb-2">
+                        <span className="w-5 h-5 bg-black text-white flex items-center justify-center text-xs font-mono font-bold">2</span>
+                        <span className="font-black text-xs">設定欲批量套用的關係類型與數值</span>
+                      </div>
+
+                      {/* Relationship Type Selection Tabs */}
+                      <div className="grid grid-cols-3 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setBatchRelType('cooccur')}
+                          className={`flex items-center justify-center gap-1.5 py-2 px-2 border-2 border-black font-black text-xs uppercase cursor-pointer transition-colors ${
+                            batchRelType === 'cooccur'
+                              ? 'bg-emerald-600 text-white shadow-xs'
+                              : 'bg-white text-black hover:bg-neutral-100'
+                          }`}
+                        >
+                          <ArrowUpRight size={14} />
+                          <span>共現權重</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBatchRelType('soft')}
+                          className={`flex items-center justify-center gap-1.5 py-2 px-2 border-2 border-black font-black text-xs uppercase cursor-pointer transition-colors ${
+                            batchRelType === 'soft'
+                              ? 'bg-amber-500 text-black shadow-xs'
+                              : 'bg-white text-black hover:bg-neutral-100'
+                          }`}
+                        >
+                          <ArrowDownRight size={14} />
+                          <span>軟排除 (弱相容)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBatchRelType('hard')}
+                          className={`flex items-center justify-center gap-1.5 py-2 px-2 border-2 border-black font-black text-xs uppercase cursor-pointer transition-colors ${
+                            batchRelType === 'hard'
+                              ? 'bg-rose-600 text-white shadow-xs'
+                              : 'bg-white text-black hover:bg-neutral-100'
+                          }`}
+                        >
+                          <X size={14} />
+                          <span>硬排除 (互斥)</span>
+                        </button>
+                      </div>
+
+                      {/* Type-Specific Parameters */}
+                      {batchRelType === 'cooccur' && (
+                        <div className="border border-black p-3 bg-neutral-50 flex flex-col gap-3 text-xs">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <label className="font-bold">共現權重 (-10 ~ +10):</label>
+                              <input
+                                type="number"
+                                min="-10"
+                                max="10"
+                                value={batchRelCoWeight}
+                                onChange={(e) => setBatchRelCoWeight(Number(e.target.value))}
+                                className="w-16 border-2 border-black p-1 text-center font-mono font-bold bg-white text-sm"
+                              />
+                              <input
+                                type="range"
+                                min="-10"
+                                max="10"
+                                value={batchRelCoWeight}
+                                onChange={(e) => setBatchRelCoWeight(Number(e.target.value))}
+                                className="w-32 accent-black cursor-pointer"
+                              />
+                            </div>
+
+                            {/* Weight Quick Presets */}
+                            <div className="flex flex-wrap items-center gap-1 text-[11px]">
+                              <span className="font-bold text-neutral-600">預設:</span>
+                              {[
+                                { label: '+8 強正', val: 8 },
+                                { label: '+5 顯著', val: 5 },
+                                { label: '+2 輕微', val: 2 },
+                                { label: '-2 弱斥', val: -2 },
+                                { label: '-5 排斥', val: -5 },
+                                { label: '-8 強斥', val: -8 },
+                              ].map((p) => (
+                                <button
+                                  key={p.val}
+                                  type="button"
+                                  onClick={() => setBatchRelCoWeight(p.val)}
+                                  className={`px-1.5 py-0.5 border border-black font-mono cursor-pointer ${
+                                    batchRelCoWeight === p.val ? 'bg-black text-white font-bold' : 'bg-white hover:bg-neutral-200'
+                                  }`}
+                                >
+                                  {p.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Toggle Intensity Modifiers for Batch */}
+                          <div className="border-t border-black/20 pt-2 flex flex-col gap-2">
+                            <label className="flex items-center gap-2 cursor-pointer font-bold select-none">
+                              <input
+                                type="checkbox"
+                                checked={batchRelCoHasModifiers}
+                                onChange={(e) => setBatchRelCoHasModifiers(e.target.checked)}
+                                className="accent-black w-4 h-4 cursor-pointer"
+                              />
+                              <span>附加詞條強度共現修正 (-10 ~ +10)</span>
+                            </label>
+
+                            {batchRelCoHasModifiers && (
+                              <div className="grid grid-cols-5 gap-1.5 bg-white border border-black p-2">
+                                {ALL_INTENSITIES.map((lvl) => (
+                                  <div key={lvl} className="flex flex-col items-center gap-1 border border-neutral-300 p-1 bg-neutral-50">
+                                    <span className="text-[10px] font-bold text-neutral-700">{lvl}</span>
+                                    <input
+                                      type="number"
+                                      min="-10"
+                                      max="10"
+                                      value={batchRelCoModifiers[lvl]}
+                                      onChange={(e) => {
+                                        const val = parseInt(e.target.value, 10);
+                                        const clean = isNaN(val) ? 0 : Math.max(-10, Math.min(10, val));
+                                        setBatchRelCoModifiers((prev) => ({ ...prev, [lvl]: clean }));
+                                      }}
+                                      className="w-full text-center text-xs font-mono font-bold border border-black/40 p-0.5 bg-white"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {batchRelType === 'soft' && (
+                        <div className="border border-black p-3 bg-neutral-50 flex flex-col gap-3 text-xs">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <label className="font-bold">懲罰乘數 (0.01 ~ 0.95):</label>
+                              <input
+                                type="number"
+                                step="0.05"
+                                min="0.01"
+                                max="0.95"
+                                value={batchRelSoftMultiplier}
+                                onChange={(e) => setBatchRelSoftMultiplier(Number(e.target.value))}
+                                className="w-20 border-2 border-black p-1 text-center font-mono font-bold bg-white text-sm"
+                              />
+                            </div>
+
+                            {/* Multiplier Presets */}
+                            <div className="flex items-center gap-1 text-[11px]">
+                              <span className="font-bold text-neutral-600">快捷:</span>
+                              {[
+                                { label: '×0.05 極低同出', val: 0.05 },
+                                { label: '×0.10 通常弱相容', val: 0.1 },
+                                { label: '×0.25 輕微壓低', val: 0.25 },
+                              ].map((m) => (
+                                <button
+                                  key={m.val}
+                                  type="button"
+                                  onClick={() => setBatchRelSoftMultiplier(m.val)}
+                                  className={`px-1.5 py-0.5 border border-black font-mono cursor-pointer ${
+                                    batchRelSoftMultiplier === m.val ? 'bg-black text-white font-bold' : 'bg-white hover:bg-neutral-200'
+                                  }`}
+                                >
+                                  {m.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-1">
+                            <label className="font-bold">弱相容情境說明:</label>
+                            <input
+                              type="text"
+                              value={batchRelSoftNote}
+                              onChange={(e) => setBatchRelSoftNote(e.target.value)}
+                              placeholder="輸入情境說明或點選下方範本..."
+                              className="border-2 border-black p-1.5 text-xs bg-white focus:outline-none"
+                            />
+                            <div className="flex flex-wrap gap-1 mt-1 text-[10px]">
+                              <span className="text-neutral-500 font-bold">快速範本:</span>
+                              {['設定風格弱相容', '性格傾向衝突', '心理防衛相牴觸', '社交取態難以並存'].map((txt) => (
+                                <button
+                                  key={txt}
+                                  type="button"
+                                  onClick={() => setBatchRelSoftNote(txt)}
+                                  className="border border-neutral-400 bg-white hover:border-black px-1.5 py-0.5 cursor-pointer"
+                                >
+                                  {txt}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {batchRelType === 'hard' && (
+                        <div className="border border-black p-3 bg-neutral-50 flex flex-col gap-3 text-xs">
+                          <div className="flex flex-col gap-1">
+                            <label className="font-bold">互斥阻斷原因 (選填):</label>
+                            <input
+                              type="text"
+                              value={batchRelHardReason}
+                              onChange={(e) => setBatchRelHardReason(e.target.value)}
+                              placeholder="輸入邏輯互斥原因..."
+                              className="border-2 border-black p-1.5 text-xs bg-white focus:outline-none"
+                            />
+                            <div className="flex flex-wrap gap-1 mt-1 text-[10px]">
+                              <span className="text-neutral-500 font-bold">快速範本:</span>
+                              {['設定邏輯互斥', '性格特徵根本相反', '行為取向絕對衝突', '無法並存的核心性格'].map((txt) => (
+                                <button
+                                  key={txt}
+                                  type="button"
+                                  onClick={() => setBatchRelHardReason(txt)}
+                                  className="border border-neutral-400 bg-white hover:border-black px-1.5 py-0.5 cursor-pointer"
+                                >
+                                  {txt}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Conflict Strategy */}
+                      <div className="flex items-center justify-between border border-black/30 p-2 bg-neutral-50 text-xs">
+                        <span className="font-bold text-neutral-800">若目標詞條已存在關係時：</span>
+                        <div className="flex items-center gap-4">
+                          <label className="flex items-center gap-1.5 cursor-pointer font-medium">
+                            <input
+                              type="radio"
+                              name="batch-conflict"
+                              checked={batchRelConflictMode === 'overwrite'}
+                              onChange={() => setBatchRelConflictMode('overwrite')}
+                              className="accent-black"
+                            />
+                            <span>覆蓋更新現有關係</span>
+                          </label>
+                          <label className="flex items-center gap-1.5 cursor-pointer font-medium">
+                            <input
+                              type="radio"
+                              name="batch-conflict"
+                              checked={batchRelConflictMode === 'skip'}
+                              onChange={() => setBatchRelConflictMode('skip')}
+                              className="accent-black"
+                            />
+                            <span>略過已有關係之詞條</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Execute Button */}
+                      <button
+                        id="btn-execute-batch-apply-relations"
+                        type="button"
+                        disabled={batchRelSelectedTraitIds.size === 0}
+                        onClick={handleBatchApplyRelationships}
+                        className={`w-full flex items-center justify-center gap-2 py-2.5 px-4 border-2 border-black text-xs font-black uppercase tracking-wider transition-colors cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 ${
+                          batchRelSelectedTraitIds.size > 0
+                            ? 'bg-amber-400 text-black hover:bg-amber-500'
+                            : 'bg-neutral-200 text-neutral-400 border-neutral-300 cursor-not-allowed shadow-none'
+                        }`}
+                      >
+                        <Zap size={14} />
+                        <span>
+                          {batchRelSelectedTraitIds.size === 0
+                            ? '請先在上方勾選目標詞條'
+                            : `批量套用「${
+                                batchRelType === 'cooccur'
+                                  ? `共現權重 (${batchRelCoWeight > 0 ? '+' : ''}${batchRelCoWeight})`
+                                  : batchRelType === 'soft'
+                                  ? `軟排除 (×${batchRelSoftMultiplier})`
+                                  : '硬排除'
+                              }」至 ${batchRelSelectedTraitIds.size} 個詞條`}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Sub-mode 2: 現有關係批量管理與維護 (Batch Manage Existing) */}
+                {batchRelSubMode === 'manage-existing' && (
+                  <div className="flex flex-col gap-3">
+                    {/* Header Summary & Stats */}
+                    <div className="grid grid-cols-4 border-2 border-black text-center text-xs divide-x-2 divide-black bg-white">
+                      <div className="p-2 bg-neutral-50 flex flex-col gap-0.5">
+                        <span className="text-[10px] text-neutral-500 font-bold">現有全部關係</span>
+                        <span className="font-mono font-black text-sm">{allNormalizedRules.length} 條</span>
+                      </div>
+                      <div className="p-2 bg-emerald-50 flex flex-col gap-0.5">
+                        <span className="text-[10px] text-emerald-800 font-bold">共現規則</span>
+                        <span className="font-mono font-black text-sm text-emerald-900">{coRules.length} 條</span>
+                      </div>
+                      <div className="p-2 bg-amber-50 flex flex-col gap-0.5">
+                        <span className="text-[10px] text-amber-800 font-bold">軟排除</span>
+                        <span className="font-mono font-black text-sm text-amber-900">{softRules.length} 條</span>
+                      </div>
+                      <div className="p-2 bg-rose-50 flex flex-col gap-0.5">
+                        <span className="text-[10px] text-rose-800 font-bold">硬排除</span>
+                        <span className="font-mono font-black text-sm text-rose-900">{hardRules.length} 條</span>
+                      </div>
+                    </div>
+
+                    {/* Filter toolbar */}
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-2 border border-black p-2 bg-neutral-50 text-xs">
+                      {/* Filter pills */}
+                      <div className="flex items-center gap-1 w-full sm:w-auto">
+                        <button
+                          type="button"
+                          onClick={() => setBatchExistingFilterType('all')}
+                          className={`px-2 py-1 text-[11px] font-bold border border-black cursor-pointer transition-colors ${
+                            batchExistingFilterType === 'all' ? 'bg-black text-white' : 'bg-white hover:bg-neutral-200'
+                          }`}
+                        >
+                          全部 ({allNormalizedRules.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBatchExistingFilterType('cooccur')}
+                          className={`px-2 py-1 text-[11px] font-bold border border-black cursor-pointer transition-colors ${
+                            batchExistingFilterType === 'cooccur' ? 'bg-emerald-700 text-white' : 'bg-white hover:bg-neutral-200'
+                          }`}
+                        >
+                          共現 ({coRules.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBatchExistingFilterType('soft')}
+                          className={`px-2 py-1 text-[11px] font-bold border border-black cursor-pointer transition-colors ${
+                            batchExistingFilterType === 'soft' ? 'bg-amber-500 text-black' : 'bg-white hover:bg-neutral-200'
+                          }`}
+                        >
+                          軟排除 ({softRules.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBatchExistingFilterType('hard')}
+                          className={`px-2 py-1 text-[11px] font-bold border border-black cursor-pointer transition-colors ${
+                            batchExistingFilterType === 'hard' ? 'bg-rose-700 text-white' : 'bg-white hover:bg-neutral-200'
+                          }`}
+                        >
+                          硬排除 ({hardRules.length})
+                        </button>
+                      </div>
+
+                      {/* Search box */}
+                      <div className="relative w-full sm:w-56">
+                        <input
+                          type="text"
+                          value={batchExistingSearch}
+                          onChange={(e) => setBatchExistingSearch(e.target.value)}
+                          placeholder="搜尋關聯詞條或說明..."
+                          className="w-full border border-black px-2 py-1 text-xs pl-6 bg-white focus:outline-none"
+                        />
+                        <Search size={12} className="absolute left-1.5 top-2 text-neutral-500 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    {/* Batch Actions Bar for Selected Existing Rules */}
+                    <div className="border-2 border-black p-2.5 bg-neutral-100 flex flex-col gap-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-1.5 font-bold">
+                          <CheckSquare size={14} className="text-black" />
+                          <span>已勾選 {selectedExistingRuleIds.size} / {filteredNormalizedRules.length} 條規則</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-[11px]">
+                          <button
+                            type="button"
+                            onClick={handleSelectAllExistingRules}
+                            className="border border-black px-2 py-0.5 bg-white hover:bg-neutral-200 font-bold cursor-pointer"
+                          >
+                            全選
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleDeselectAllExistingRules}
+                            className="border border-black px-2 py-0.5 bg-white hover:bg-neutral-200 font-bold cursor-pointer text-neutral-600"
+                          >
+                            清空選取
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Batch Operation Buttons */}
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-1.5">
+                        {/* Batch Delete */}
+                        <button
+                          type="button"
+                          disabled={selectedExistingRuleIds.size === 0}
+                          onClick={handleBatchDeleteExistingRules}
+                          className={`flex items-center justify-center gap-1 py-1.5 px-2 border-2 border-black font-black text-xs uppercase transition-colors cursor-pointer ${
+                            selectedExistingRuleIds.size > 0
+                              ? 'bg-rose-600 text-white hover:bg-rose-700'
+                              : 'bg-neutral-200 text-neutral-400 border-neutral-300 cursor-not-allowed'
+                          }`}
+                        >
+                          <Trash2 size={12} />
+                          <span>批量刪除 ({selectedExistingRuleIds.size})</span>
+                        </button>
+
+                        {/* Batch Convert Soft to Hard */}
+                        <button
+                          type="button"
+                          disabled={selectedExistingRuleIds.size === 0}
+                          onClick={handleBatchConvertSoftToHard}
+                          className={`flex items-center justify-center gap-1 py-1.5 px-1 border border-black font-bold text-[11px] transition-colors cursor-pointer ${
+                            selectedExistingRuleIds.size > 0
+                              ? 'bg-white hover:bg-neutral-200 text-neutral-900'
+                              : 'bg-neutral-200 text-neutral-400 border-neutral-300 cursor-not-allowed'
+                          }`}
+                          title="將選取的軟排除升級為硬排除"
+                        >
+                          <span>升為硬排除</span>
+                        </button>
+
+                        {/* Batch Convert Hard to Soft */}
+                        <button
+                          type="button"
+                          disabled={selectedExistingRuleIds.size === 0}
+                          onClick={handleBatchConvertHardToSoft}
+                          className={`flex items-center justify-center gap-1 py-1.5 px-1 border border-black font-bold text-[11px] transition-colors cursor-pointer ${
+                            selectedExistingRuleIds.size > 0
+                              ? 'bg-white hover:bg-neutral-200 text-neutral-900'
+                              : 'bg-neutral-200 text-neutral-400 border-neutral-300 cursor-not-allowed'
+                          }`}
+                          title="將選取的硬排除轉為軟排除 (弱相容)"
+                        >
+                          <span>降為軟排除</span>
+                        </button>
+
+                        {/* Batch Update Weights for selected cooccurrence rules */}
+                        <div className="flex items-center gap-1 border border-black bg-white px-1.5 py-0.5">
+                          <input
+                            type="number"
+                            min="-10"
+                            max="10"
+                            value={batchNewWeightVal}
+                            onChange={(e) => setBatchNewWeightVal(Number(e.target.value))}
+                            className="w-12 text-center text-xs font-mono font-bold border border-neutral-300 focus:outline-none"
+                            title="設定新權重"
+                          />
+                          <button
+                            type="button"
+                            disabled={selectedExistingRuleIds.size === 0}
+                            onClick={() => handleBatchUpdateCoWeights(batchNewWeightVal)}
+                            className={`flex-1 text-[10px] font-black uppercase py-1 border border-black text-center transition-colors cursor-pointer ${
+                              selectedExistingRuleIds.size > 0
+                                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                : 'bg-neutral-200 text-neutral-400 border-neutral-300 cursor-not-allowed'
+                            }`}
+                          >
+                            改共現權重
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Fast Clear Shortcuts */}
+                      <div className="flex flex-wrap items-center justify-between border-t border-black/20 pt-1.5 text-[10px] text-neutral-600">
+                        <span className="font-bold">快速清空特定規則：</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleClearRulesByType('cooccur')}
+                            className="underline hover:text-black cursor-pointer"
+                          >
+                            清空所有共現
+                          </button>
+                          <span>·</span>
+                          <button
+                            type="button"
+                            onClick={() => handleClearRulesByType('soft')}
+                            className="underline hover:text-black cursor-pointer"
+                          >
+                            清空所有軟排除
+                          </button>
+                          <span>·</span>
+                          <button
+                            type="button"
+                            onClick={() => handleClearRulesByType('hard')}
+                            className="underline hover:text-black cursor-pointer"
+                          >
+                            清空所有硬排除
+                          </button>
+                          <span>·</span>
+                          <button
+                            type="button"
+                            onClick={() => handleClearRulesByType('all')}
+                            className="underline text-rose-700 font-bold hover:text-rose-900 cursor-pointer"
+                          >
+                            清空全部關係
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Scrollable Rules List */}
+                    <div className="border-2 border-black max-h-72 overflow-y-auto flex flex-col divide-y divide-black text-xs bg-white">
+                      {filteredNormalizedRules.length === 0 ? (
+                        <div className="p-8 text-center text-neutral-500 font-mono">
+                          目前無符合篩選條件的關聯規則。
+                        </div>
+                      ) : (
+                        filteredNormalizedRules.map((rule) => {
+                          const isChecked = selectedExistingRuleIds.has(rule.id);
+
+                          return (
+                            <div
+                              key={rule.id}
+                              className={`p-2.5 flex items-center justify-between gap-3 transition-colors ${
+                                isChecked ? 'bg-amber-50/80 font-bold' : 'hover:bg-neutral-50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5 flex-1 truncate">
+                                <span
+                                  onClick={() => toggleExistingRuleSelect(rule.id)}
+                                  className={`w-4 h-4 border border-black flex items-center justify-center shrink-0 cursor-pointer ${
+                                    isChecked ? 'bg-black text-white' : 'bg-white'
+                                  }`}
+                                >
+                                  {isChecked && <Check size={11} strokeWidth={3} />}
+                                </span>
+
+                                <span
+                                  className={`text-[10px] font-mono px-1.5 py-0.5 border font-bold shrink-0 ${
+                                    rule.type === 'cooccur'
+                                      ? 'border-emerald-700 bg-emerald-100 text-emerald-950'
+                                      : rule.type === 'soft'
+                                      ? 'border-amber-700 bg-amber-100 text-amber-950'
+                                      : 'border-rose-700 bg-rose-100 text-rose-950'
+                                  }`}
+                                >
+                                  {rule.typeName}
+                                </span>
+
+                                <div className="flex flex-col truncate">
+                                  <div className="flex items-center gap-1.5 truncate">
+                                    <span className="font-bold text-neutral-900 truncate">
+                                      {rule.targetTrait.name}
+                                    </span>
+                                    <span className="text-[10px] font-mono text-neutral-500">
+                                      [{rule.targetTrait.axis}]
+                                    </span>
+                                  </div>
+                                  <span className="text-[11px] text-neutral-600 truncate font-mono">
+                                    {rule.detail}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="font-mono font-bold text-xs border border-black px-1.5 py-0.5 bg-neutral-50">
+                                  {rule.summary}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCoRules((prev) => prev.filter((r) => r.id !== rule.id));
+                                    setSoftRules((prev) => prev.filter((s) => s.id !== rule.id));
+                                    setHardRules((prev) => prev.filter((h) => h.id !== rule.id));
+                                    setSelectedExistingRuleIds((prev) => {
+                                      const next = new Set(prev);
+                                      next.delete(rule.id);
+                                      return next;
+                                    });
+                                  }}
+                                  className="border border-black p-1 hover:bg-black hover:text-white transition-colors cursor-pointer"
+                                  title="刪除此規則"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
