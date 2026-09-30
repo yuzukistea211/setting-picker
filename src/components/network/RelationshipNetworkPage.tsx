@@ -538,7 +538,7 @@ export const RelationshipNetworkPage: React.FC = () => {
                     id="btn-inspect-delete-rel"
                     type="button"
                     onClick={() => handleDeleteRelationship(selectedRel.id)}
-                    className="p-1 border border-black text-red-600 hover:bg-red-600 hover:text-white cursor-pointer"
+                    className="p-1 border border-black text-black hover:bg-black hover:text-white cursor-pointer"
                   >
                     <Trash2 size={13} />
                   </button>
@@ -649,7 +649,7 @@ export const RelationshipNetworkPage: React.FC = () => {
                     id="btn-inspect-delete-char"
                     type="button"
                     onClick={() => handleDeleteCharacter(selectedChar.id)}
-                    className="p-1 border border-black text-red-600 hover:bg-red-600 hover:text-white cursor-pointer"
+                    className="p-1 border border-black text-black hover:bg-black hover:text-white cursor-pointer"
                   >
                     <Trash2 size={13} />
                   </button>

@@ -48,7 +48,7 @@ export class ErrorBoundary extends Component<Props, State> {
               系統在載入或渲染時發生未預期的例外狀況，這通常與快取資料結構不相容有關。
             </p>
             {this.state.error && (
-              <div className="bg-neutral-100 p-3 text-xs border border-neutral-300 mb-4 overflow-auto max-h-32 text-red-600">
+              <div className="bg-neutral-100 p-3 text-xs border border-neutral-300 mb-4 overflow-auto max-h-32 text-black font-mono">
                 {this.state.error.message || String(this.state.error)}
               </div>
             )}

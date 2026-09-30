@@ -188,7 +188,7 @@ export const MetricManagementModal: React.FC<MetricManagementModalProps> = ({
                       type="button"
                       onClick={() => handleDeleteMetric(metric.id)}
                       disabled={metrics.length <= 1}
-                      className="p-1 border border-black text-red-600 hover:bg-red-600 hover:text-white disabled:opacity-30 cursor-pointer"
+                      className="p-1 border border-black text-black hover:bg-black hover:text-white disabled:opacity-30 cursor-pointer"
                       title="刪除"
                     >
                       <Trash2 size={12} />

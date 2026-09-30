@@ -134,6 +134,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
   const [batchExistingSearch, setBatchExistingSearch] = useState<string>('');
   const [selectedExistingRuleIds, setSelectedExistingRuleIds] = useState<Set<string>>(new Set());
   const [batchNewWeightVal, setBatchNewWeightVal] = useState<number>(5);
+  const [batchApplyNotice, setBatchApplyNotice] = useState<string>('');
 
   const [saveNotification, setSaveNotification] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string>('');
@@ -181,6 +182,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
       setHardRules([]);
       setEditorTab('basic');
       setErrorMsg('');
+      setBatchApplyNotice('');
     } else if (selectedTrait) {
       setFormName(selectedTrait.name);
       setFormAxis(selectedTrait.axis);
@@ -204,6 +206,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
         ),
       );
       setErrorMsg('');
+      setBatchApplyNotice('');
     }
   }, [panelMode, selectedTraitId, dataset]);
 
@@ -393,6 +396,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
     setBatchRelAxisFilter('ALL');
     setBatchExistingSearch('');
     setBatchExistingFilterType('all');
+    setBatchApplyNotice('');
     setErrorMsg('');
     setSaveNotification('已重設為當前設定');
   };
@@ -540,7 +544,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
         : '硬排除 (邏輯互斥)';
 
     const skipNote = skippedCount > 0 ? ` (已略過 ${skippedCount} 個已有關係的詞條)` : '';
-    setSaveNotification(`已批量為 ${appliedCount} 個詞條設定「${typeLabel}」${skipNote}！請點擊右上角「儲存詞條修改」保存。`);
+    setBatchApplyNotice(`已批量為 ${appliedCount} 個詞條設定「${typeLabel}」${skipNote}！請點擊右上角「儲存詞條修改」保存。`);
     setErrorMsg('');
   };
 
@@ -1204,7 +1208,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                   }}
                   className={`flex items-center justify-center gap-1 py-1.5 px-1 border-2 border-black font-black text-[11px] uppercase tracking-wider transition-colors cursor-pointer ${
                     selectedBatchTraitIds.size > 0
-                      ? 'bg-amber-300 text-black hover:bg-amber-400 active:translate-y-0.5'
+                      ? 'bg-neutral-100 text-black hover:bg-neutral-200 active:translate-y-0.5'
                       : 'bg-neutral-200 text-neutral-400 border-neutral-300 cursor-not-allowed'
                   }`}
                   title="批量修改選取詞條的軸線標籤"
@@ -1220,7 +1224,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                   onClick={() => setIsBatchDeleteModalOpen(true)}
                   className={`flex items-center justify-center gap-1 py-1.5 px-1 border-2 border-black font-black text-[11px] uppercase tracking-wider transition-colors cursor-pointer ${
                     selectedBatchTraitIds.size > 0
-                      ? 'bg-rose-600 text-white hover:bg-rose-700 active:translate-y-0.5'
+                      ? 'bg-black text-white hover:bg-neutral-800 active:translate-y-0.5'
                       : 'bg-neutral-200 text-neutral-400 border-neutral-300 cursor-not-allowed'
                   }`}
                   title="批量刪除選取的詞條及其所有關聯規則"
@@ -1311,7 +1315,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                         className={`text-left text-xs px-2.5 py-1.5 border transition-colors cursor-pointer flex items-center justify-between ${
                           isBatchMode
                             ? isBatchSelected
-                              ? 'border-2 border-black bg-amber-100 text-neutral-900 font-bold shadow-2xs'
+                              ? 'border-2 border-black bg-neutral-200 text-black font-bold shadow-2xs'
                               : 'border-black hover:bg-neutral-100 bg-white'
                             : isSelected
                               ? 'border-black bg-black text-white font-black'
@@ -1338,7 +1342,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                               !isBatchMode && isSelected
                                 ? 'border-white text-white'
                                 : isBatchSelected
-                                ? 'border-neutral-500 text-neutral-900 bg-amber-200'
+                                ? 'border-neutral-500 text-neutral-900 bg-neutral-300'
                                 : 'border-neutral-400 text-neutral-600'
                             }`}
                           >
@@ -1366,15 +1370,15 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
       <div id="trait-editor-panel" className="w-full overflow-auto md:w-2/3 border-2 border-black p-5 bg-(--main-color) flex flex-col gap-5 min-h-[580px] max-h-[720px]">
         {/* Global Notifications */}
         {saveNotification && (
-          <div className="bg-emerald-50 border-2 border-emerald-700 text-emerald-900 text-xs px-3 py-2 font-bold flex items-center justify-between animate-in fade-in">
+          <div className="bg-neutral-100 border-2 border-black text-black text-xs px-3 py-2 font-bold flex items-center justify-between animate-in fade-in">
             <div className="flex items-center gap-1.5">
-              <Check size={14} className="text-emerald-700" />
+              <Check size={14} className="text-black" />
               <span>{saveNotification}</span>
             </div>
             <button
               type="button"
               onClick={() => setSaveNotification('')}
-              className="text-emerald-700 hover:text-emerald-900 cursor-pointer"
+              className="text-neutral-500 hover:text-black cursor-pointer"
             >
               <X size={13} />
             </button>
@@ -1382,15 +1386,15 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
         )}
 
         {errorMsg && (
-          <div className="bg-rose-50 border-2 border-rose-700 text-rose-900 text-xs px-3 py-2 font-bold flex items-center justify-between">
+          <div className="bg-black border-2 border-black text-white text-xs px-3 py-2 font-bold flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              <AlertCircle size={14} className="text-rose-700" />
+              <AlertCircle size={14} className="text-white" />
               <span>{errorMsg}</span>
             </div>
             <button
               type="button"
               onClick={() => setErrorMsg('')}
-              className="text-rose-700 hover:text-rose-900 cursor-pointer"
+              className="text-neutral-300 hover:text-white cursor-pointer"
             >
               <X size={13} />
             </button>
@@ -1418,10 +1422,10 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                     id="btn-batch-manage-current-relations"
                     type="button"
                     onClick={() => handleStartEditTrait('batch-rel')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 border-2 border-black bg-amber-300 text-black hover:bg-amber-400 text-xs font-black uppercase tracking-wider transition-colors cursor-pointer shadow-xs active:translate-y-0.5"
+                    className="flex items-center gap-1.5 px-3 py-1.5 border-2 border-black bg-neutral-200 text-black hover:bg-black hover:text-white text-xs font-black uppercase tracking-wider transition-colors cursor-pointer shadow-xs active:translate-y-0.5"
                     title="批量管理此詞條的共現與排除關係"
                   >
-                    <Zap size={13} className="text-black" />
+                    <Zap size={13} className="text-black group-hover:text-white" />
                     <span>批量管理關係</span>
                   </button>
                   <button
@@ -1437,7 +1441,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                     id="btn-delete-current-trait"
                     type="button"
                     onClick={() => handleDeleteTrait(selectedTrait.id)}
-                    className="border border-black p-1.5 hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-colors cursor-pointer"
+                    className="border border-black p-1.5 hover:bg-black hover:text-white transition-colors cursor-pointer"
                     title="刪除此詞條"
                     aria-label="刪除此詞條"
                   >
@@ -1488,13 +1492,13 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
             <div className="border border-black p-3.5 flex flex-col gap-2.5">
               <div className="flex items-center justify-between border-b border-black pb-1.5">
                 <div className="flex items-center gap-1.5">
-                  <ArrowUpRight size={15} className="text-emerald-700" />
+                  <ArrowUpRight size={15} className="text-black" />
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => handleStartEditTrait('batch-rel')}
-                    className="text-[11px] font-mono font-bold text-amber-900 border border-black bg-amber-200 hover:bg-amber-300 px-1.5 py-0.5 cursor-pointer flex items-center gap-1 transition-colors"
+                    className="text-[11px] font-mono font-bold text-black border border-black bg-neutral-100 hover:bg-black hover:text-white px-1.5 py-0.5 cursor-pointer flex items-center gap-1 transition-colors"
                   >
                     <Zap size={11} />
                     <span>批量設定</span>
@@ -1539,13 +1543,13 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
             <div className="border border-black p-3.5 flex flex-col gap-3">
               <div className="flex items-center justify-between border-b border-black pb-1.5">
                 <div className="flex items-center gap-1.5">
-                  <ArrowDownRight size={15} className="text-rose-700" />
+                  <ArrowDownRight size={15} className="text-black" />
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => handleStartEditTrait('batch-rel')}
-                    className="text-[11px] font-mono font-bold text-amber-900 border border-black bg-amber-200 hover:bg-amber-300 px-1.5 py-0.5 cursor-pointer flex items-center gap-1 transition-colors"
+                    className="text-[11px] font-mono font-bold text-black border border-black bg-neutral-100 hover:bg-black hover:text-white px-1.5 py-0.5 cursor-pointer flex items-center gap-1 transition-colors"
                   >
                     <Zap size={11} />
                     <span>批量設定</span>
@@ -1767,11 +1771,11 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                 onClick={() => setEditorTab('batch-rel')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-black uppercase cursor-pointer border-t-2 border-x-2 border-black -mb-[2px] transition-colors ${
                   editorTab === 'batch-rel'
-                    ? 'bg-amber-300 text-black border-black shadow-xs font-black'
-                    : 'bg-amber-100 text-amber-950 hover:bg-amber-200'
+                    ? 'bg-black text-white border-black shadow-xs font-black'
+                    : 'bg-neutral-100 text-black hover:bg-neutral-200'
                 }`}
               >
-                <Zap size={13} className="text-amber-900" />
+                <Zap size={13} className={editorTab === 'batch-rel' ? 'text-white' : 'text-black'} />
                 <span>批量管理關係 ({coRules.length + softRules.length + hardRules.length})</span>
               </button>
             </div>
@@ -1783,7 +1787,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                   {/* Trait Name */}
                   <div className="flex flex-col gap-1">
                     <label className="text-[11px] font-bold text-neutral-800">
-                      詞條名稱 <span className="text-rose-600">*</span>
+                      詞條名稱 <span className="text-black font-black">*</span>
                     </label>
                     <input
                       type="text"
@@ -1799,7 +1803,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center justify-between">
                       <label className="text-[11px] font-bold text-neutral-800">
-                        軸線標籤 <span className="text-rose-600">*</span>
+                        軸線標籤 <span className="text-black font-black">*</span>
                       </label>
                       <button
                         type="button"
@@ -1841,7 +1845,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                 {/* Description */}
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-bold text-neutral-800">
-                    詳細描述 <span className="text-rose-600">*</span>
+                    詳細描述 <span className="text-black font-black">*</span>
                   </label>
                   <textarea
                     required
@@ -1863,7 +1867,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                     <button
                       type="button"
                       onClick={() => setEditorTab('batch-rel')}
-                      className="text-[11px] font-bold text-amber-900 border border-black bg-amber-300 hover:bg-amber-400 px-2 py-0.5 cursor-pointer flex items-center gap-1 transition-colors"
+                      className="text-[11px] font-bold text-black border border-black bg-neutral-200 hover:bg-black hover:text-white px-2 py-0.5 cursor-pointer flex items-center gap-1 transition-colors"
                     >
                       <Zap size={12} />
                       <span>批量管理關係</span>
@@ -1894,10 +1898,10 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
 
                     <div
                       onClick={() => setEditorTab('batch-rel')}
-                      className="col-span-3 border-2 border-black p-2 bg-amber-200/70 hover:bg-amber-300 cursor-pointer transition-colors flex items-center justify-between shadow-2xs"
+                      className="col-span-3 border-2 border-black p-2 bg-neutral-100 hover:bg-neutral-200 cursor-pointer transition-colors flex items-center justify-between shadow-2xs"
                     >
-                      <div className="flex items-center gap-1.5 font-black text-xs text-amber-950">
-                        <Zap size={14} className="text-amber-800" />
+                      <div className="flex items-center gap-1.5 font-black text-xs text-black">
+                        <Zap size={14} className="text-black" />
                         <span>批量管理與設定關係 (多詞條同時指派或批量維護)</span>
                       </div>
                       <span className="font-mono text-[11px] font-bold text-black border border-black bg-white px-2 py-0.5">
@@ -1919,7 +1923,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                   <button
                     type="button"
                     onClick={() => setEditorTab('batch-rel')}
-                    className="shrink-0 flex items-center gap-1 border border-black px-2 py-1 bg-amber-300 hover:bg-amber-400 font-bold text-xs cursor-pointer transition-colors"
+                    className="shrink-0 flex items-center gap-1 border border-black px-2 py-1 bg-neutral-100 hover:bg-black hover:text-white font-bold text-xs cursor-pointer transition-colors"
                   >
                     <Zap size={12} />
                     <span>批量設定共現</span>
@@ -2010,7 +2014,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                                   }));
                                 }}
                                 className={`w-full text-center text-xs font-mono font-bold border border-black/30 focus:border-black p-0.5 bg-white ${
-                                  modVal > 0 ? 'text-emerald-700' : modVal < 0 ? 'text-rose-700' : 'text-neutral-800'
+                                  modVal !== 0 ? 'text-black bg-neutral-100 font-bold' : 'text-neutral-800'
                                 }`}
                               />
                             </div>
@@ -2046,15 +2050,15 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                           <div className="p-2.5 flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
                               {isPositive ? (
-                                <ArrowUpRight size={15} className="text-emerald-700 shrink-0" />
+                                <ArrowUpRight size={15} className="text-black shrink-0" />
                               ) : (
-                                <ArrowDownRight size={15} className="text-rose-700 shrink-0" />
+                                <ArrowDownRight size={15} className="text-black shrink-0" />
                               )}
                               <div className="flex flex-col">
                                 <div className="flex items-center gap-1.5">
                                   <span className="font-bold">{other.name}</span>
                                   {hasModifiers && (
-                                    <span className="text-[10px] font-mono border border-black px-1 bg-amber-50 text-amber-900 font-bold">
+                                    <span className="text-[10px] font-mono border border-black px-1 bg-neutral-100 text-black font-bold">
                                       含強度修正
                                     </span>
                                   )}
@@ -2076,9 +2080,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                                     prev.map((r) => (r.id === rule.id ? { ...r, weight: val } : r)),
                                   );
                                 }}
-                                className={`border border-black px-1.5 py-0.5 text-xs w-14 text-center font-mono font-bold ${
-                                  isPositive ? 'text-emerald-800' : 'text-rose-800'
-                                }`}
+                                className="border border-black px-1.5 py-0.5 text-xs w-14 text-center font-mono font-bold text-black"
                               />
                               <button
                                 type="button"
@@ -2139,11 +2141,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                                           );
                                         }}
                                         className={`w-full text-center text-xs font-mono font-bold border border-black/30 focus:border-black p-0.5 ${
-                                          modVal > 0
-                                            ? 'text-emerald-700 bg-emerald-50/50'
-                                            : modVal < 0
-                                            ? 'text-rose-700 bg-rose-50/50'
-                                            : 'text-neutral-800'
+                                          modVal !== 0 ? 'text-black bg-neutral-100 font-bold' : 'text-neutral-800'
                                         }`}
                                       />
                                     </div>
@@ -2170,7 +2168,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                   <button
                     type="button"
                     onClick={() => setEditorTab('batch-rel')}
-                    className="shrink-0 flex items-center gap-1 border border-black px-2.5 py-1 bg-amber-300 hover:bg-amber-400 font-bold text-xs cursor-pointer transition-colors"
+                    className="shrink-0 flex items-center gap-1 border border-black px-2.5 py-1 bg-neutral-100 hover:bg-black hover:text-white font-bold text-xs cursor-pointer transition-colors"
                   >
                     <Zap size={12} />
                     <span>批量設定軟排除</span>
@@ -2318,7 +2316,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                   <button
                     type="button"
                     onClick={() => setEditorTab('batch-rel')}
-                    className="shrink-0 flex items-center gap-1 border border-black px-2.5 py-1 bg-amber-300 hover:bg-amber-400 font-bold text-xs cursor-pointer transition-colors"
+                    className="shrink-0 flex items-center gap-1 border border-black px-2.5 py-1 bg-neutral-100 hover:bg-black hover:text-white font-bold text-xs cursor-pointer transition-colors"
                   >
                     <Zap size={12} />
                     <span>批量設定硬排除</span>
@@ -2489,15 +2487,6 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                 {/* Sub-mode 1: 批量設定/新增關係 (Batch Apply) */}
                 {batchRelSubMode === 'add-batch' && (
                   <div className="flex flex-col gap-3">
-                    {/* Top description */}
-                    <div className="border border-black p-2.5 bg-amber-50 text-xs text-amber-950 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Zap size={15} className="text-amber-700 shrink-0" />
-                        <span>
-                          <strong>批量設定精靈：</strong>勾選目標詞條，統一為「<strong>{formName || selectedTrait?.name || '當前詞條'}</strong>」指派共現權重或排除阻斷規則。
-                        </span>
-                      </div>
-                    </div>
 
                     {/* Step 1: Target Traits Selection */}
                     <div className="border-2 border-black p-3 bg-white flex flex-col gap-3">
@@ -2596,7 +2585,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                               onClick={() => toggleBatchRelCandidateSelect(cand.id)}
                               className={`border p-1.5 text-xs flex items-center justify-between cursor-pointer transition-colors select-none ${
                                 isSelected
-                                  ? 'border-2 border-black bg-amber-100 font-bold shadow-2xs'
+                                  ? 'border-2 border-black bg-neutral-200 font-bold shadow-2xs'
                                   : 'border-neutral-300 bg-white hover:bg-neutral-100'
                               }`}
                             >
@@ -2618,10 +2607,10 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                                 <span
                                   className={`text-[9px] font-mono px-1 py-0.5 border shrink-0 ${
                                     existingRel.type === 'cooccur'
-                                      ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
+                                      ? 'border-black bg-neutral-100 text-black'
                                       : existingRel.type === 'soft'
-                                      ? 'border-amber-600 bg-amber-50 text-amber-900'
-                                      : 'border-rose-600 bg-rose-50 text-rose-900'
+                                      ? 'border-dashed border-black bg-neutral-100 text-black'
+                                      : 'border-black bg-black text-white'
                                   }`}
                                   title={`目前已有規則: ${existingRel.label}`}
                                 >
@@ -2654,7 +2643,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                           onClick={() => setBatchRelType('cooccur')}
                           className={`flex items-center justify-center gap-1.5 py-2 px-2 border-2 border-black font-black text-xs uppercase cursor-pointer transition-colors ${
                             batchRelType === 'cooccur'
-                              ? 'bg-emerald-600 text-white shadow-xs'
+                              ? 'bg-black text-white shadow-xs'
                               : 'bg-white text-black hover:bg-neutral-100'
                           }`}
                         >
@@ -2666,7 +2655,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                           onClick={() => setBatchRelType('soft')}
                           className={`flex items-center justify-center gap-1.5 py-2 px-2 border-2 border-black font-black text-xs uppercase cursor-pointer transition-colors ${
                             batchRelType === 'soft'
-                              ? 'bg-amber-500 text-black shadow-xs'
+                              ? 'bg-black text-white shadow-xs'
                               : 'bg-white text-black hover:bg-neutral-100'
                           }`}
                         >
@@ -2678,7 +2667,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                           onClick={() => setBatchRelType('hard')}
                           className={`flex items-center justify-center gap-1.5 py-2 px-2 border-2 border-black font-black text-xs uppercase cursor-pointer transition-colors ${
                             batchRelType === 'hard'
-                              ? 'bg-rose-600 text-white shadow-xs'
+                              ? 'bg-black text-white shadow-xs'
                               : 'bg-white text-black hover:bg-neutral-100'
                           }`}
                         >
@@ -2793,9 +2782,10 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                             <div className="flex items-center gap-1 text-[11px]">
                               <span className="font-bold text-neutral-600">快捷:</span>
                               {[
-                                { label: '×0.05 極低同出', val: 0.05 },
-                                { label: '×0.10 通常弱相容', val: 0.1 },
-                                { label: '×0.25 輕微壓低', val: 0.25 },
+                                { label: '×0.05', val: 0.05 },
+                                { label: '×0.25', val: 0.25 },
+                                { label: '×0.5', val: 0.5 },
+                                                                { label: '×0.8', val: 0.8 },
                               ].map((m) => (
                                 <button
                                   key={m.val}
@@ -2900,7 +2890,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                         onClick={handleBatchApplyRelationships}
                         className={`w-full flex items-center justify-center gap-2 py-2.5 px-4 border-2 border-black text-xs font-black uppercase tracking-wider transition-colors cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 ${
                           batchRelSelectedTraitIds.size > 0
-                            ? 'bg-amber-400 text-black hover:bg-amber-500'
+                            ? 'bg-black text-white hover:bg-neutral-800'
                             : 'bg-neutral-200 text-neutral-400 border-neutral-300 cursor-not-allowed shadow-none'
                         }`}
                       >
@@ -2910,13 +2900,34 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                             ? '請先在上方勾選目標詞條'
                             : `批量套用「${
                                 batchRelType === 'cooccur'
-                                  ? `共現權重 (${batchRelCoWeight > 0 ? '+' : ''}${batchRelCoWeight})`
+                                    ? `共現權重 (${batchRelCoWeight > 0 ? '+' : ''}${batchRelCoWeight})`
                                   : batchRelType === 'soft'
                                   ? `軟排除 (×${batchRelSoftMultiplier})`
                                   : '硬排除'
                               }」至 ${batchRelSelectedTraitIds.size} 個詞條`}
                         </span>
                       </button>
+
+                      {/* Notice below execute button */}
+                      {batchApplyNotice && (
+                        <div
+                          id="batch-apply-notice"
+                          className="border-2 border-black bg-neutral-100 text-black p-2.5 text-xs font-bold flex items-center justify-between animate-in fade-in shadow-xs"
+                        >
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 size={16} className="text-black shrink-0" />
+                            <span>{batchApplyNotice}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setBatchApplyNotice('')}
+                            className="text-neutral-500 hover:text-black font-mono text-xs px-1 cursor-pointer"
+                            title="關閉提示"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -2930,17 +2941,17 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                         <span className="text-[10px] text-neutral-500 font-bold">現有全部關係</span>
                         <span className="font-mono font-black text-sm">{allNormalizedRules.length} 條</span>
                       </div>
-                      <div className="p-2 bg-emerald-50 flex flex-col gap-0.5">
-                        <span className="text-[10px] text-emerald-800 font-bold">共現規則</span>
-                        <span className="font-mono font-black text-sm text-emerald-900">{coRules.length} 條</span>
+                      <div className="p-2 bg-neutral-100 flex flex-col gap-0.5">
+                        <span className="text-[10px] text-neutral-600 font-bold">共現規則</span>
+                        <span className="font-mono font-black text-sm text-black">{coRules.length} 條</span>
                       </div>
-                      <div className="p-2 bg-amber-50 flex flex-col gap-0.5">
-                        <span className="text-[10px] text-amber-800 font-bold">軟排除</span>
-                        <span className="font-mono font-black text-sm text-amber-900">{softRules.length} 條</span>
+                      <div className="p-2 bg-neutral-100 flex flex-col gap-0.5">
+                        <span className="text-[10px] text-neutral-600 font-bold">軟排除</span>
+                        <span className="font-mono font-black text-sm text-black">{softRules.length} 條</span>
                       </div>
-                      <div className="p-2 bg-rose-50 flex flex-col gap-0.5">
-                        <span className="text-[10px] text-rose-800 font-bold">硬排除</span>
-                        <span className="font-mono font-black text-sm text-rose-900">{hardRules.length} 條</span>
+                      <div className="p-2 bg-neutral-100 flex flex-col gap-0.5">
+                        <span className="text-[10px] text-neutral-600 font-bold">硬排除</span>
+                        <span className="font-mono font-black text-sm text-black">{hardRules.length} 條</span>
                       </div>
                     </div>
 
@@ -2961,7 +2972,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                           type="button"
                           onClick={() => setBatchExistingFilterType('cooccur')}
                           className={`px-2 py-1 text-[11px] font-bold border border-black cursor-pointer transition-colors ${
-                            batchExistingFilterType === 'cooccur' ? 'bg-emerald-700 text-white' : 'bg-white hover:bg-neutral-200'
+                            batchExistingFilterType === 'cooccur' ? 'bg-black text-white' : 'bg-white hover:bg-neutral-200'
                           }`}
                         >
                           共現 ({coRules.length})
@@ -2970,7 +2981,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                           type="button"
                           onClick={() => setBatchExistingFilterType('soft')}
                           className={`px-2 py-1 text-[11px] font-bold border border-black cursor-pointer transition-colors ${
-                            batchExistingFilterType === 'soft' ? 'bg-amber-500 text-black' : 'bg-white hover:bg-neutral-200'
+                            batchExistingFilterType === 'soft' ? 'bg-black text-white' : 'bg-white hover:bg-neutral-200'
                           }`}
                         >
                           軟排除 ({softRules.length})
@@ -2979,7 +2990,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                           type="button"
                           onClick={() => setBatchExistingFilterType('hard')}
                           className={`px-2 py-1 text-[11px] font-bold border border-black cursor-pointer transition-colors ${
-                            batchExistingFilterType === 'hard' ? 'bg-rose-700 text-white' : 'bg-white hover:bg-neutral-200'
+                            batchExistingFilterType === 'hard' ? 'bg-black text-white' : 'bg-white hover:bg-neutral-200'
                           }`}
                         >
                           硬排除 ({hardRules.length})
@@ -3033,7 +3044,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                           onClick={handleBatchDeleteExistingRules}
                           className={`flex items-center justify-center gap-1 py-1.5 px-2 border-2 border-black font-black text-xs uppercase transition-colors cursor-pointer ${
                             selectedExistingRuleIds.size > 0
-                              ? 'bg-rose-600 text-white hover:bg-rose-700'
+                              ? 'bg-black text-white hover:bg-neutral-800'
                               : 'bg-neutral-200 text-neutral-400 border-neutral-300 cursor-not-allowed'
                           }`}
                         >
@@ -3088,7 +3099,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                             onClick={() => handleBatchUpdateCoWeights(batchNewWeightVal)}
                             className={`flex-1 text-[10px] font-black uppercase py-1 border border-black text-center transition-colors cursor-pointer ${
                               selectedExistingRuleIds.size > 0
-                                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                ? 'bg-black text-white hover:bg-neutral-800'
                                 : 'bg-neutral-200 text-neutral-400 border-neutral-300 cursor-not-allowed'
                             }`}
                           >
@@ -3128,7 +3139,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                           <button
                             type="button"
                             onClick={() => handleClearRulesByType('all')}
-                            className="underline text-rose-700 font-bold hover:text-rose-900 cursor-pointer"
+                            className="underline text-black font-bold hover:text-neutral-600 cursor-pointer"
                           >
                             清空全部關係
                           </button>
@@ -3150,7 +3161,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                             <div
                               key={rule.id}
                               className={`p-2.5 flex items-center justify-between gap-3 transition-colors ${
-                                isChecked ? 'bg-amber-50/80 font-bold' : 'hover:bg-neutral-50'
+                                isChecked ? 'bg-neutral-200 font-bold' : 'hover:bg-neutral-50'
                               }`}
                             >
                               <div className="flex items-center gap-2.5 flex-1 truncate">
@@ -3166,10 +3177,10 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                                 <span
                                   className={`text-[10px] font-mono px-1.5 py-0.5 border font-bold shrink-0 ${
                                     rule.type === 'cooccur'
-                                      ? 'border-emerald-700 bg-emerald-100 text-emerald-950'
+                                      ? 'border-black bg-white text-black'
                                       : rule.type === 'soft'
-                                      ? 'border-amber-700 bg-amber-100 text-amber-950'
-                                      : 'border-rose-700 bg-rose-100 text-rose-950'
+                                      ? 'border-dashed border-black bg-neutral-100 text-black'
+                                      : 'border-black bg-black text-white'
                                   }`}
                                 >
                                   {rule.typeName}
@@ -3286,9 +3297,9 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
             aria-labelledby="single-delete-title"
           >
             {/* Header */}
-            <div className="flex items-center justify-between border-b-2 border-black px-4 py-3 bg-rose-50">
-              <div className="flex items-center gap-2 text-rose-900">
-                <span className="p-1 border border-black bg-rose-600 text-white">
+            <div className="flex items-center justify-between border-b-2 border-black px-4 py-3 bg-neutral-100">
+              <div className="flex items-center gap-2 text-black">
+                <span className="p-1 border border-black bg-black text-white">
                   <AlertTriangle size={15} />
                 </span>
                 <h3 id="single-delete-title" className="font-black text-xs tracking-wider uppercase">
@@ -3308,7 +3319,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
             {/* Content */}
             <div className="p-4 flex flex-col gap-3 text-xs leading-relaxed">
               <p className="text-neutral-900 font-bold">
-                確定要永久刪除詞條「<span className="text-rose-700 underline underline-offset-2">{traitPendingDelete.name}</span>」嗎？
+                確定要永久刪除詞條「<span className="text-black underline underline-offset-2 font-black">{traitPendingDelete.name}</span>」嗎？
               </p>
 
               <div className="flex items-center gap-2 font-mono text-[11px]">
@@ -3347,7 +3358,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                 </div>
               </div>
 
-              <p className="text-rose-700 font-mono text-[11px] font-bold bg-rose-50 border border-rose-300 p-2">
+              <p className="text-black font-mono text-[11px] font-bold bg-neutral-100 border border-black p-2">
                 ⚠️ 此操作無法復原，該詞條將從詞庫及關聯性矩陣中徹底清除。
               </p>
             </div>
@@ -3366,7 +3377,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                 id="btn-confirm-delete-trait"
                 type="button"
                 onClick={() => executeDeleteSingleTrait(traitPendingDelete.id)}
-                className="flex items-center gap-1.5 px-4 py-1.5 border-2 border-black bg-rose-600 text-white hover:bg-rose-700 text-xs font-black uppercase tracking-wider transition-colors cursor-pointer shadow-xs active:translate-y-0.5"
+                className="flex items-center gap-1.5 px-4 py-1.5 border-2 border-black bg-black text-white hover:bg-neutral-800 text-xs font-black uppercase tracking-wider transition-colors cursor-pointer shadow-xs active:translate-y-0.5"
               >
                 <Trash2 size={13} />
                 <span>確認刪除詞條</span>
@@ -3393,9 +3404,9 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
             aria-labelledby="batch-delete-title"
           >
             {/* Header */}
-            <div className="flex items-center justify-between border-b-2 border-black px-4 py-3 bg-rose-50">
-              <div className="flex items-center gap-2 text-rose-900">
-                <span className="p-1 border border-black bg-rose-600 text-white">
+            <div className="flex items-center justify-between border-b-2 border-black px-4 py-3 bg-neutral-100">
+              <div className="flex items-center gap-2 text-black">
+                <span className="p-1 border border-black bg-black text-white">
                   <Trash2 size={15} />
                 </span>
                 <h3 id="batch-delete-title" className="font-black text-xs tracking-wider uppercase">
@@ -3416,7 +3427,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
             <div className="p-4 flex flex-col gap-3 text-xs leading-relaxed max-h-[70vh] overflow-y-auto">
               <p className="text-neutral-900 font-bold">
                 即將永久刪除選取的{' '}
-                <span className="text-rose-700 underline font-black text-sm">
+                <span className="text-black underline font-black text-sm">
                   {selectedBatchTraitIds.size}
                 </span>{' '}
                 個詞條。
@@ -3454,7 +3465,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                     .map((t) => (
                       <span
                         key={t.id}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 border border-rose-300 bg-white text-rose-950 font-bold text-[11px] shadow-2xs"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 border border-black bg-white text-black font-bold text-[11px] shadow-2xs"
                       >
                         <span>{t.name}</span>
                         <span className="text-[9px] font-mono text-neutral-500">[{t.axis}]</span>
@@ -3463,7 +3474,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                 </div>
               </div>
 
-              <p className="text-rose-700 font-mono text-[11px] font-bold bg-rose-50 border border-rose-300 p-2">
+              <p className="text-black font-mono text-[11px] font-bold bg-neutral-100 border border-black p-2">
                 ⚠️ 此動作為永久性操作，刪除後無法撤銷，相關詞條與規則將被徹底移除。
               </p>
             </div>
@@ -3482,7 +3493,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                 id="btn-confirm-batch-delete-execute"
                 type="button"
                 onClick={executeBatchDelete}
-                className="flex items-center gap-1.5 px-4 py-1.5 border-2 border-black bg-rose-600 text-white hover:bg-rose-700 text-xs font-black uppercase tracking-wider transition-colors cursor-pointer shadow-xs active:translate-y-0.5"
+                className="flex items-center gap-1.5 px-4 py-1.5 border-2 border-black bg-black text-white hover:bg-neutral-800 text-xs font-black uppercase tracking-wider transition-colors cursor-pointer shadow-xs active:translate-y-0.5"
               >
                 <Trash2 size={13} />
                 <span>確認批量刪除 ({selectedBatchTraitIds.size} 個詞條)</span>
@@ -3509,9 +3520,9 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
             aria-labelledby="batch-axis-title"
           >
             {/* Header */}
-            <div className="flex items-center justify-between border-b-2 border-black px-4 py-3 bg-amber-50">
-              <div className="flex items-center gap-2 text-amber-950">
-                <span className="p-1 border border-black bg-amber-400 text-black">
+            <div className="flex items-center justify-between border-b-2 border-black px-4 py-3 bg-neutral-100">
+              <div className="flex items-center gap-2 text-black">
+                <span className="p-1 border border-black bg-black text-white">
                   <Tag size={15} />
                 </span>
                 <h3 id="batch-axis-title" className="font-black text-xs tracking-wider uppercase">
@@ -3532,7 +3543,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
             <div className="p-4 flex flex-col gap-3 text-xs leading-relaxed max-h-[70vh] overflow-y-auto">
               <p className="text-neutral-900 font-bold">
                 即將為選取的{' '}
-                <span className="text-amber-800 underline font-black text-sm">
+                <span className="text-black underline font-black text-sm">
                   {selectedBatchTraitIds.size}
                 </span>{' '}
                 個詞條統一指定新的軸線標籤。
@@ -3621,7 +3632,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                           <div className="flex items-center gap-1.5 font-mono text-[10px] shrink-0">
                             <span className="text-neutral-500 line-through">{t.axis}</span>
                             <span className="text-neutral-400">➔</span>
-                            <span className={`font-bold px-1.5 py-0.5 border ${isSame ? 'border-neutral-300 text-neutral-500 bg-neutral-100' : 'border-amber-400 text-amber-950 bg-amber-100'}`}>
+                            <span className={`font-bold px-1.5 py-0.5 border ${isSame ? 'border-neutral-300 text-neutral-500 bg-neutral-100' : 'border-black text-black bg-neutral-200'}`}>
                               {targetName}
                             </span>
                           </div>
@@ -3653,7 +3664,7 @@ export const TraitDetailView: React.FC<TraitDetailViewProps> = ({ dataset, onSav
                 className={`flex items-center gap-1.5 px-4 py-1.5 border-2 border-black text-xs font-black uppercase tracking-wider transition-colors cursor-pointer shadow-xs active:translate-y-0.5 ${
                   isCreatingNewAxis && !batchNewAxisInput.trim()
                     ? 'bg-neutral-300 text-neutral-500 border-neutral-400 cursor-not-allowed'
-                    : 'bg-amber-400 text-black hover:bg-amber-500'
+                    : 'bg-black text-white hover:bg-neutral-800'
                 }`}
               >
                 <Tag size={13} />

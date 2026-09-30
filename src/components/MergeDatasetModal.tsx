@@ -81,16 +81,16 @@ export const MergeDatasetModal: React.FC<MergeDatasetModalProps> = ({
               <span className="text-[10px] text-neutral-500 font-bold">現有詞條</span>
               <span className="text-lg font-black">{currentDataset.traits.length}</span>
             </div>
-            <div className="border border-black p-2 bg-emerald-50 text-emerald-950 flex flex-col">
-              <span className="text-[10px] text-emerald-700 font-bold">新增詞條</span>
+            <div className="border border-black p-2 bg-neutral-100 text-black flex flex-col">
+              <span className="text-[10px] text-neutral-600 font-bold">新增詞條</span>
               <span className="text-lg font-black">+{analysis.newTraitsCount}</span>
             </div>
-            <div className="border border-black p-2 bg-amber-50 text-amber-950 flex flex-col">
-              <span className="text-[10px] text-amber-700 font-bold">重名詞條</span>
+            <div className="border border-black p-2 bg-neutral-100 text-black flex flex-col">
+              <span className="text-[10px] text-neutral-600 font-bold">重名詞條</span>
               <span className="text-lg font-black">{analysis.duplicateTraitNames.length}</span>
             </div>
-            <div className="border border-black p-2 bg-sky-50 text-sky-950 flex flex-col">
-              <span className="text-[10px] text-sky-700 font-bold">新增軸線</span>
+            <div className="border border-black p-2 bg-neutral-100 text-black flex flex-col">
+              <span className="text-[10px] text-neutral-600 font-bold">新增軸線</span>
               <span className="text-lg font-black">+{analysis.newAxesNames.length}</span>
             </div>
           </div>
@@ -174,7 +174,7 @@ export const MergeDatasetModal: React.FC<MergeDatasetModalProps> = ({
                   {analysis.duplicateTraitNames.map((name) => (
                     <span
                       key={name}
-                      className="px-2 py-0.5 border border-black bg-amber-100 text-amber-900"
+                      className="px-2 py-0.5 border border-black bg-neutral-200 text-black"
                     >
                       {name}
                     </span>
@@ -200,7 +200,7 @@ export const MergeDatasetModal: React.FC<MergeDatasetModalProps> = ({
                   {analysis.newAxesNames.map((axis) => (
                     <span
                       key={axis}
-                      className="px-2 py-0.5 border border-black bg-sky-100 text-sky-900"
+                      className="px-2 py-0.5 border border-black bg-neutral-200 text-black font-mono font-bold"
                     >
                       {axis}
                     </span>

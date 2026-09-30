@@ -180,22 +180,26 @@ export default function App() {
           id="global-notification"
           className={`max-w-7xl w-full mx-auto px-4 mt-3 flex items-center justify-between p-3 border-2 border-black font-mono text-xs font-bold transition-all shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] ${
             notification.type === 'success'
-              ? 'bg-emerald-100 text-emerald-950 border-emerald-900'
-              : 'bg-rose-100 text-rose-950 border-rose-900'
+              ? 'bg-neutral-100 text-black border-black'
+              : 'bg-black text-white border-black'
           }`}
         >
           <div className="flex items-center gap-2">
             {notification.type === 'success' ? (
-              <Check size={16} className="text-emerald-700 shrink-0" />
+              <Check size={16} className="text-black shrink-0" />
             ) : (
-              <AlertCircle size={16} className="text-rose-700 shrink-0" />
+              <AlertCircle size={16} className="text-white shrink-0" />
             )}
             <span>{notification.message}</span>
           </div>
           <button
             type="button"
             onClick={() => setNotification(null)}
-            className="p-1 hover:bg-black hover:text-white border border-black cursor-pointer ml-3 shrink-0"
+            className={`p-1 border cursor-pointer ml-3 shrink-0 ${
+              notification.type === 'success'
+                ? 'hover:bg-black hover:text-white border-black text-black'
+                : 'hover:bg-white hover:text-black border-white text-white'
+            }`}
             aria-label="關閉提示"
           >
             <X size={14} />

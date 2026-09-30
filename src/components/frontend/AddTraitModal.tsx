@@ -200,7 +200,7 @@ export const AddTraitModal: React.FC<AddTraitModalProps> = ({
                         </span>
                       )}
                       {conflict && !isPresent && (
-                        <span className="text-[10px] font-mono bg-amber-100 text-amber-900 border border-amber-600 px-1.5 py-0.5 flex items-center gap-1">
+                        <span className="text-[10px] font-mono bg-neutral-200 text-black border border-black px-1.5 py-0.5 flex items-center gap-1">
                           <AlertTriangle size={10} />
                           <span>與「{conflict.conflictingTrait.name}」互斥</span>
                         </span>
@@ -219,7 +219,7 @@ export const AddTraitModal: React.FC<AddTraitModalProps> = ({
                   </p>
 
                   {conflict && !isPresent && (
-                    <p className="text-[10px] font-mono text-amber-900 bg-amber-50 p-1 border-l-2 border-amber-500">
+                    <p className="text-[10px] font-mono text-black bg-neutral-100 p-1 border-l-2 border-black">
                       互斥原因：{conflict.reason}
                     </p>
                   )}

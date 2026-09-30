@@ -297,8 +297,8 @@ export const ExportPartialModal: React.FC<ExportPartialModalProps> = ({
 
         {/* Delete Confirmation Box */}
         {showDeleteConfirm && (
-          <div className="border-t-2 border-rose-800 bg-rose-50 p-3 flex flex-col gap-2 text-xs font-mono text-rose-950 animate-in fade-in">
-            <div className="flex items-center gap-2 font-bold text-rose-900">
+          <div className="border-t-2 border-black bg-neutral-100 p-3 flex flex-col gap-2 text-xs font-mono text-black animate-in fade-in">
+            <div className="flex items-center gap-2 font-bold text-black">
               <AlertCircle size={16} />
               <span>確認批量刪除？</span>
             </div>
@@ -316,7 +316,7 @@ export const ExportPartialModal: React.FC<ExportPartialModalProps> = ({
               <button
                 type="button"
                 onClick={handleBulkDelete}
-                className="px-4 py-1 border border-rose-900 bg-rose-700 text-white font-bold hover:bg-rose-800 cursor-pointer"
+                className="px-4 py-1 border border-black bg-black text-white font-bold hover:bg-neutral-800 cursor-pointer"
               >
                 確認刪除 {selectedIds.size} 個詞條
               </button>
@@ -331,7 +331,7 @@ export const ExportPartialModal: React.FC<ExportPartialModalProps> = ({
               <button
                 type="button"
                 onClick={() => setShowDeleteConfirm(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 border border-rose-800 text-rose-800 hover:bg-rose-800 hover:text-white font-bold text-xs transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-black text-black hover:bg-black hover:text-white font-bold text-xs transition-colors cursor-pointer"
               >
                 <Trash2 size={13} />
                 <span>批量刪除 ({selectedIds.size})</span>

@@ -222,7 +222,7 @@ const CellEditorDrawer: React.FC<CellEditorDrawerProps> = React.memo(({
                   }
                 }}
                 className={`font-mono font-bold text-xs border border-black px-1.5 py-0.5 w-14 text-center bg-white ${
-                  editCoocWeight > 0 ? 'text-emerald-800' : editCoocWeight < 0 ? 'text-rose-800' : ''
+                  editCoocWeight !== 0 ? 'text-black font-black' : 'text-neutral-500'
                 }`}
               />
             </div>
@@ -268,11 +268,7 @@ const CellEditorDrawer: React.FC<CellEditorDrawerProps> = React.memo(({
                         }));
                       }}
                       className={`w-full text-center text-xs font-mono font-bold border border-black/30 focus:border-black p-0.5 ${
-                        modVal > 0
-                          ? 'text-emerald-700 bg-emerald-50/50'
-                          : modVal < 0
-                          ? 'text-rose-700 bg-rose-50/50'
-                          : 'text-neutral-800'
+                        modVal !== 0 ? 'text-black bg-neutral-100 font-bold' : 'text-neutral-800'
                       }`}
                     />
                   </div>
@@ -583,7 +579,7 @@ export const MatrixHeatmap: React.FC<MatrixHeatmapProps> = ({
                     const weightStr = coocWeight > 0 ? `+${coocWeight}` : `${coocWeight}`;
                     cellElement = (
                       <div className="flex flex-col items-center justify-center leading-none py-0.5">
-                        <span className={coocWeight > 0 ? 'font-black text-emerald-950' : 'font-bold text-rose-950'}>
+                        <span className="font-black text-black">
                           {weightStr}
                         </span>
                         <span className="text-[9px] font-mono text-neutral-600">[{softMultiplier.toFixed(2)}]</span>

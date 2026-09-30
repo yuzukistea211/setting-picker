@@ -322,7 +322,7 @@ export const TraitFrequencyD3Chart: React.FC<TraitFrequencyD3ChartProps> = ({ st
             </div>
             <div className="flex items-center justify-between text-[11px] font-mono">
               <span>實際頻率：</span>
-              <span className="font-bold text-yellow-300">{hoveredTrait.rate}%</span>
+              <span className="font-bold text-white">{hoveredTrait.rate}%</span>
             </div>
             <div className="border-t border-neutral-800 pt-1 mt-1">
               <span className="text-[10px] text-neutral-400 block mb-0.5 font-bold">

@@ -399,7 +399,7 @@ export const RelationshipModal: React.FC<RelationshipModalProps> = ({
                   onDelete(relationship.id);
                   onClose();
                 }}
-                className="flex items-center gap-1 px-3 py-1.5 border border-black text-xs font-bold text-red-600 hover:bg-red-600 hover:text-white cursor-pointer"
+                className="flex items-center gap-1 px-3 py-1.5 border border-black text-xs font-bold text-black hover:bg-black hover:text-white cursor-pointer"
               >
                 <Trash2 size={14} />
                 <span>刪除關係</span>

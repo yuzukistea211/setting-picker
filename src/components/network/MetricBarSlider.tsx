@@ -112,7 +112,7 @@ export const MetricBarSlider: React.FC<MetricBarSliderProps> = ({
                 <button
                   type="button"
                   onClick={onDelete}
-                  className="opacity-40 group-hover:opacity-100 hover:text-red-600 p-0.5 cursor-pointer text-neutral-600"
+                  className="opacity-40 group-hover:opacity-100 hover:text-black p-0.5 cursor-pointer text-neutral-600"
                   title="刪除此指標"
                 >
                   <Trash2 size={10} />

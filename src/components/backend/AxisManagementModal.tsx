@@ -138,15 +138,15 @@ export const AxisManagementModal: React.FC<AxisManagementModalProps> = ({
         </div>
 
         {errorMsg && (
-          <div className="bg-rose-100 border border-rose-800 text-rose-900 text-xs p-2 font-bold">
+          <div className="bg-black border border-black text-white text-xs p-2 font-bold">
             {errorMsg}
           </div>
         )}
 
         {/* Confirmation prompt for deleting axis with traits */}
         {axisPendingDelete && (
-          <div className="bg-amber-50 border-2 border-amber-600 p-3 text-xs flex flex-col gap-2">
-            <div className="font-bold text-amber-900">
+          <div className="bg-neutral-100 border-2 border-black p-3 text-xs flex flex-col gap-2">
+            <div className="font-bold text-black">
               軸線「{axisPendingDelete.name}」下尚有{' '}
               {dataset.traits.filter((t) => t.axis === axisPendingDelete.name).length}{' '}
               個詞條。刪除後這些詞條將自動歸類至「未分類」。
@@ -162,7 +162,7 @@ export const AxisManagementModal: React.FC<AxisManagementModalProps> = ({
               <button
                 type="button"
                 onClick={() => executeDeleteAxis(axisPendingDelete)}
-                className="px-2.5 py-1 border-2 border-amber-800 bg-amber-700 text-white hover:bg-amber-800 text-xs font-bold cursor-pointer"
+                className="px-2.5 py-1 border-2 border-black bg-black text-white hover:bg-neutral-800 text-xs font-bold cursor-pointer"
               >
                 確認刪除
               </button>

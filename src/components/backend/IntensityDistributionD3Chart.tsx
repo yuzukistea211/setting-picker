@@ -334,7 +334,7 @@ export const IntensityDistributionD3Chart: React.FC<IntensityDistributionD3Chart
             className={`flex items-center gap-1 px-2 py-0.5 border text-xs font-bold font-mono ${
               isWellAligned
                 ? 'border-black bg-neutral-100 text-black'
-                : 'border-black bg-amber-100 text-amber-900'
+                : 'border-black bg-neutral-200 text-black'
             }`}
           >
             {isWellAligned ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
@@ -363,7 +363,7 @@ export const IntensityDistributionD3Chart: React.FC<IntensityDistributionD3Chart
             </div>
             <div className="flex items-center justify-between text-[11px] font-mono">
               <span>實際出現率：</span>
-              <span className="font-bold text-yellow-300">{hoveredLevel.actualRate}%</span>
+              <span className="font-bold text-white">{hoveredLevel.actualRate}%</span>
             </div>
             <div className="flex items-center justify-between text-[11px] font-mono">
               <span>理論預期率：</span>
@@ -371,15 +371,7 @@ export const IntensityDistributionD3Chart: React.FC<IntensityDistributionD3Chart
             </div>
             <div className="flex items-center justify-between text-[11px] font-mono border-t border-neutral-800 pt-1">
               <span>擬合誤差 (差值)：</span>
-              <span
-                className={`font-bold ${
-                  hoveredLevel.diff > 0
-                    ? 'text-emerald-300'
-                    : hoveredLevel.diff < 0
-                    ? 'text-rose-300'
-                    : 'text-neutral-200'
-                }`}
-              >
+              <span className="font-bold text-white">
                 {hoveredLevel.diff > 0 ? `+${hoveredLevel.diff}%` : `${hoveredLevel.diff}%`}
               </span>
             </div>
